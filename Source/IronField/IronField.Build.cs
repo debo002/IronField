@@ -13,13 +13,13 @@ public class IronField : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"UMG",
-			"Slate"
+			"Niagara"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"IronField"
+			"IronField/Public"
 		});
 	}
 }
