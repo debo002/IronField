@@ -52,9 +52,9 @@ public:
 private:
     UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
     float MaxHealth = 100.f;
-    
+
     UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
-    float ReviveHealth = 30.f; 
+    float ReviveHealth = 30.f;
 
     UPROPERTY(VisibleInstanceOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
     float CurrentHealth = 0.f;
@@ -68,6 +68,8 @@ private:
     UFUNCTION()
     void HandleOwnerTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser);
 
+    /** Clamps and applies a new health value, broadcasting OnHealthChanged if it actually changed. */
+    void SetHealthClamped(float NewHealth);
+
     void BroadcastHealthChangedIfNeeded(float PreviousHealth);
 };
-

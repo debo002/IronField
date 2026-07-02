@@ -24,15 +24,20 @@ public:
     FOnStaminaChanged OnStaminaChanged;
 
     /** Attempts to consume a flat amount of stamina. Returns false if insufficient. */
+    UFUNCTION(BlueprintCallable, Category = "Stamina|Actions")
     bool TryConsumeStamina(float Amount);
 
     /** Initiates a continuous stamina drain at the specified rate per second. */
+    UFUNCTION(BlueprintCallable, Category = "Stamina|Actions")
     void StartContinuousDrain(float DrainRate);
 
+    UFUNCTION(BlueprintCallable, Category = "Stamina|Actions")
     void StopContinuousDrain();
 
+    UFUNCTION(BlueprintPure, Category = "Stamina|State")
     float GetStaminaPercent() const;
 
+    UFUNCTION(BlueprintPure, Category = "Stamina|State")
     bool HasStamina(float MinimumAmount) const { return CurrentStamina >= MinimumAmount; }
 
     virtual void BeginPlay() override;
@@ -66,7 +71,10 @@ private:
     void UpdateTickForRegen();
     void EnableStaminaTick();
     void DisableStaminaTick();
+
+    /** Clamps and applies a new stamina value, broadcasting OnStaminaChanged and OnStaminaDepleted as needed. */
+    void SetStaminaClamped(float NewStamina);
+
     void BroadcastStaminaChangedIfNeeded(float PreviousStamina);
     void BroadcastStaminaDepletedIfNeeded(float PreviousStamina);
 };
-

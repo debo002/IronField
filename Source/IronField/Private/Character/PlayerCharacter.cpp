@@ -100,7 +100,7 @@ void AIFPlayerCharacter::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    if (GetVelocity().SizeSquared2D() <= 100.f || !HasSprintInput())
+    if (GetVelocity().SizeSquared2D() <= SprintExitSpeedSquared || !HasSprintInput())
     {
         StopSprint();
     }
@@ -273,7 +273,7 @@ void AIFPlayerCharacter::StartSprint()
     }
 
     const UIFCombatComponent* const Combat = GetCombatComponent();
-    if (!Combat || Combat->GetCombatState() != ECombatState::Idle)
+    if (!Combat || !Combat->IsIdle())
     {
         return;
     }
@@ -420,4 +420,3 @@ UIFPlayerCombatComponent* AIFPlayerCharacter::GetPlayerCombatComponent() const
 {
     return Cast<UIFPlayerCombatComponent>(GetCombatComponent());
 }
-

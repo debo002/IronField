@@ -14,10 +14,7 @@ void UIFHealthComponent::ApplyDamage(float Amount)
         return;
     }
 
-    const float PreviousHealth = CurrentHealth;
-    CurrentHealth = FMath::Max(CurrentHealth - Amount, 0.f);
-
-    BroadcastHealthChangedIfNeeded(PreviousHealth);
+    SetHealthClamped(CurrentHealth - Amount);
 
     if (CurrentHealth <= 0.f)
     {
@@ -33,10 +30,7 @@ void UIFHealthComponent::ApplyHealing(float Amount)
         return;
     }
 
-    const float PreviousHealth = CurrentHealth;
-    CurrentHealth = FMath::Min(CurrentHealth + Amount, MaxHealth);
-
-    BroadcastHealthChangedIfNeeded(PreviousHealth);
+    SetHealthClamped(CurrentHealth + Amount);
 }
 
 void UIFHealthComponent::Revive()
@@ -81,6 +75,13 @@ void UIFHealthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UIFHealthComponent::HandleOwnerTakeAnyDamage(AActor* /*DamagedActor*/, float Damage, const UDamageType* /*DamageType*/, AController* /*InstigatedBy*/, AActor* /*DamageCauser*/)
 {
     ApplyDamage(Damage);
+}
+
+void UIFHealthComponent::SetHealthClamped(float NewHealth)
+{
+    const float PreviousHealth = CurrentHealth;
+    CurrentHealth = FMath::Clamp(NewHealth, 0.f, MaxHealth);
+    BroadcastHealthChangedIfNeeded(PreviousHealth);
 }
 
 void UIFHealthComponent::BroadcastHealthChangedIfNeeded(float PreviousHealth)

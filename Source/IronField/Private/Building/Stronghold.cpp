@@ -28,7 +28,7 @@ void AIFStronghold::BeginPlay()
 
 void AIFStronghold::HandleHealthChanged(float Percent)
 {
-	// Death hit is handled by OnHealthDepleted — skip feedback here to avoid double-firing.
+	// The killing blow's feedback is played by HandleDeath instead, to avoid double-firing sound/VFX.
 	if (Percent <= 0.0f)
 	{
 		return;
@@ -39,6 +39,7 @@ void AIFStronghold::HandleHealthChanged(float Percent)
 
 void AIFStronghold::HandleDeath()
 {
+	PlayHitFeedback(GetActorLocation());
 	HandleDestruction();
 }
 
@@ -59,6 +60,7 @@ void AIFStronghold::HandleDestruction()
 {
 	OnStrongholdDestroyed.Broadcast(this);
 
+	// Placeholder destruction visuals until Chaos Fracture (Geometry Collections) replaces this with a real break-apart effect.
 	MeshComponent->SetVisibility(false);
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetActorEnableCollision(false);

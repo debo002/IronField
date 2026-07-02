@@ -1,11 +1,12 @@
 #include "Combat/PlayerCombatComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "Core/AnimMontageUtils.h"
 #include "Stats/StaminaComponent.h"
 
 void UIFPlayerCombatComponent::StartSpinAttack()
 {
-    if (bIsSpinning || GetCombatState() != ECombatState::Idle || !HasUsableStamina(MinimumStaminaToStartSpin))
+    if (bIsSpinning || !IsIdle() || !HasUsableStamina(MinimumStaminaToStartSpin))
     {
         return;
     }
@@ -27,7 +28,7 @@ void UIFPlayerCombatComponent::StartSpinAttack()
         return;
     }
 
-    // Configure the animation montage sections to loop the spin continuously.
+    // Loop the Loop section into itself; StopSpinAttack later redirects it into the End section.
     AnimInstance->Montage_SetNextSection(SpinIntroSectionName, SpinLoopSectionName, SpinAttackMontage);
     AnimInstance->Montage_SetNextSection(SpinLoopSectionName, SpinLoopSectionName, SpinAttackMontage);
     AnimInstance->Montage_JumpToSection(SpinIntroSectionName, SpinAttackMontage);
@@ -77,12 +78,7 @@ void UIFPlayerCombatComponent::ResetCombatState()
 
 void UIFPlayerCombatComponent::RequestSpinEnd()
 {
-    bIsSpinning = false;
-
-    if (StaminaComponent)
-    {
-        StaminaComponent->StopContinuousDrain();
-    }
+    HaltSpinning();
 
     if (SpinLoopSectionName.IsNone() || SpinEndSectionName.IsNone())
     {
@@ -93,12 +89,12 @@ void UIFPlayerCombatComponent::RequestSpinEnd()
     UAnimInstance* const AnimInstance = GetAnimInstance();
     if (AnimInstance && SpinAttackMontage)
     {
-        // Transition to the end section. This ensures the attack loops at least once even on a quick tap.
+        // Redirect out through the End section so a quick tap still completes at least one loop.
         AnimInstance->Montage_SetNextSection(SpinLoopSectionName, SpinEndSectionName, SpinAttackMontage);
     }
 }
 
-void UIFPlayerCombatComponent::AbortSpin()
+void UIFPlayerCombatComponent::HaltSpinning()
 {
     bIsSpinning = false;
 
@@ -106,17 +102,18 @@ void UIFPlayerCombatComponent::AbortSpin()
     {
         StaminaComponent->StopContinuousDrain();
     }
+}
+
+void UIFPlayerCombatComponent::AbortSpin()
+{
+    HaltSpinning();
 
     UAnimInstance* const AnimInstance = GetAnimInstance();
-    if (AnimInstance && SpinAttackMontage)
-    {
-        FOnMontageEnded EmptyDelegate;
-        AnimInstance->Montage_SetEndDelegate(EmptyDelegate, SpinAttackMontage);
+    IF::AnimMontageUtils::ClearMontageEndDelegate(AnimInstance, SpinAttackMontage);
 
-        if (AnimInstance->Montage_IsPlaying(SpinAttackMontage))
-        {
-            AnimInstance->Montage_Stop(SpinBlendOutTime, SpinAttackMontage);
-        }
+    if (AnimInstance && SpinAttackMontage && AnimInstance->Montage_IsPlaying(SpinAttackMontage))
+    {
+        AnimInstance->Montage_Stop(SpinBlendOutTime, SpinAttackMontage);
     }
 }
 
@@ -133,12 +130,8 @@ void UIFPlayerCombatComponent::OnSpinMontageEnded(UAnimMontage* Montage, bool /*
         return;
     }
 
-    // Handle cases where the animation finishes or gets interrupted before StopSpinAttack is called.
-    bIsSpinning = false;
-    if (StaminaComponent)
-    {
-        StaminaComponent->StopContinuousDrain();
-    }
+    // Reaching here means the montage finished or was interrupted without StopSpinAttack being called first.
+    HaltSpinning();
     RestoreIdleStateUnlessDead();
 }
 
@@ -151,4 +144,3 @@ void UIFPlayerCombatComponent::HandleStaminaDepleted()
 
     RequestSpinEnd();
 }
-

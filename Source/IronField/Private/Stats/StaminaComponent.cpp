@@ -19,18 +19,13 @@ bool UIFStaminaComponent::TryConsumeStamina(float Amount)
         return false;
     }
 
-    const float PreviousStamina = CurrentStamina;
-    CurrentStamina = FMath::Max(CurrentStamina - Amount, 0.f);
+    SetStaminaClamped(CurrentStamina - Amount);
     TimeSinceLastStaminaDrain = 0.f;
-
-    BroadcastStaminaChangedIfNeeded(PreviousStamina);
 
     if (StaminaRegenRate > 0.f)
     {
         EnableStaminaTick();
     }
-
-    BroadcastStaminaDepletedIfNeeded(PreviousStamina);
 
     return true;
 }
@@ -97,12 +92,8 @@ bool UIFStaminaComponent::CanRegenerateStamina() const
 
 void UIFStaminaComponent::DrainStamina(float DeltaTime)
 {
-    const float PreviousStamina = CurrentStamina;
-    CurrentStamina = FMath::Max(CurrentStamina - ContinuousDrainRate * DeltaTime, 0.f);
+    SetStaminaClamped(CurrentStamina - ContinuousDrainRate * DeltaTime);
     TimeSinceLastStaminaDrain = 0.f;
-
-    BroadcastStaminaChangedIfNeeded(PreviousStamina);
-    BroadcastStaminaDepletedIfNeeded(PreviousStamina);
 
     if (CurrentStamina <= 0.f)
     {
@@ -118,10 +109,7 @@ void UIFStaminaComponent::RegenerateStamina(float DeltaTime)
         return;
     }
 
-    const float PreviousStamina = CurrentStamina;
-    CurrentStamina = FMath::Min(CurrentStamina + StaminaRegenRate * DeltaTime, MaxStamina);
-
-    BroadcastStaminaChangedIfNeeded(PreviousStamina);
+    SetStaminaClamped(CurrentStamina + StaminaRegenRate * DeltaTime);
 
     if (CurrentStamina >= MaxStamina)
     {
@@ -148,6 +136,14 @@ void UIFStaminaComponent::EnableStaminaTick()
 void UIFStaminaComponent::DisableStaminaTick()
 {
     SetComponentTickEnabled(false);
+}
+
+void UIFStaminaComponent::SetStaminaClamped(float NewStamina)
+{
+    const float PreviousStamina = CurrentStamina;
+    CurrentStamina = FMath::Clamp(NewStamina, 0.f, MaxStamina);
+    BroadcastStaminaChangedIfNeeded(PreviousStamina);
+    BroadcastStaminaDepletedIfNeeded(PreviousStamina);
 }
 
 void UIFStaminaComponent::BroadcastStaminaChangedIfNeeded(float PreviousStamina)

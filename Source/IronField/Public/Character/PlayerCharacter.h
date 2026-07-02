@@ -97,6 +97,10 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float BackpedalInputThreshold = -0.1f;
 
+    /** Velocity-squared threshold below which sprinting automatically stops. */
+    UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
+    float SprintExitSpeedSquared = 100.f;
+
     /** Stamina consumed per second while sprinting. */
     UPROPERTY(EditDefaultsOnly, Category = "Player|Stamina")
     float SprintStaminaDrainRate = 10.f;
@@ -165,4 +169,3 @@ private:
     void TickCameraTransition(float DeltaTime);
     void UpdateTickEnabled();
 };
-

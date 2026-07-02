@@ -6,7 +6,6 @@
 
 class UAnimMontage;
 class UBoxComponent;
-class UPrimitiveComponent;
 class UIFCombatComponent;
 class UIFHealthComponent;
 class UIFStaminaComponent;
@@ -32,8 +31,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Characters|Components")
     UIFCombatComponent* GetCombatComponent() const { return CombatComponent; }
 
-    /** Enables or disables the weapon's overlap collision detection. */
-    void SetWeaponCollisionEnabled(bool bEnabled);
+    /** Weapon overlap volume, attached to the weapon socket. Owned here since it's a physical, skeleton-attached component; CombatComponent drives when it's active. */
+    UFUNCTION(BlueprintPure, Category = "Characters|Components")
+    UBoxComponent* GetWeaponCollisionBox() const { return WeaponCollisionBox; }
 
     virtual void BeginPlay() override;
 
@@ -83,9 +83,6 @@ private:
     UFUNCTION()
     void HandleGetUpMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
-    UFUNCTION()
-    void HandleWeaponCollisionBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
-
     void BindGameplayDelegates();
     void UnbindGameplayDelegates();
     void ClearLifecycleMontageDelegates() const;
@@ -98,4 +95,3 @@ private:
 
     FTimerHandle ReviveTimerHandle;
 };
-

@@ -21,10 +21,9 @@ public:
     virtual void NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference) override;
 
 private:
-    UPROPERTY(EditAnywhere, Category = "Combat|Damage", meta = (AllowPrivateAccess = "true"))
+    UPROPERTY(EditAnywhere, Category = "Combat|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
     float Damage = 20.f;
 
     UPROPERTY(EditAnywhere, Category = "Combat|Damage", meta = (AllowPrivateAccess = "true"))
     TSubclassOf<UDamageType> DamageTypeClass;
 };
-

@@ -29,7 +29,7 @@ struct FIFComboStep
     TObjectPtr<UAnimMontage> AttackMontage;
 
     /** Stamina required to execute this combo step. */
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|ComboStep")
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|ComboStep", meta = (ClampMin = "0.0"))
     float StaminaCost = 10.f;
 };
 

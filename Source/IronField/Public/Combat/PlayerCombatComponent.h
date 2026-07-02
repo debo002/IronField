@@ -28,6 +28,9 @@ protected:
 
     virtual void ResetCombatState() override;
 
+    /** The spin attack doesn't use ActiveAttackMontage tracking, so combo input must never queue while spinning. */
+    virtual bool CanQueueComboAttack() const override { return !bIsSpinning; }
+
 private:
     UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation", meta = (AllowPrivateAccess = "true"))
     TObjectPtr<UAnimMontage> SpinAttackMontage;
@@ -61,7 +64,9 @@ private:
 
     void RequestSpinEnd();
 
+    /** Clears the spinning flag and stops stamina drain. Shared by every path that ends a spin. */
+    void HaltSpinning();
+
     void AbortSpin();
     void AbortSpinAndRestoreIdle();
 };
-

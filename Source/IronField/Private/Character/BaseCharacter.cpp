@@ -3,6 +3,7 @@
 #include "Animation/AnimInstance.h"
 #include "Components/BoxComponent.h"
 #include "Combat/CombatComponent.h"
+#include "Core/AnimMontageUtils.h"
 #include "Stats/HealthComponent.h"
 #include "Stats/StaminaComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -24,6 +25,7 @@ AIFBaseCharacter::AIFBaseCharacter(const FObjectInitializer& ObjectInitializer)
     WeaponCollisionBox->SetCollisionObjectType(ECC_WorldDynamic);
     WeaponCollisionBox->SetCollisionResponseToAllChannels(ECR_Ignore);
     WeaponCollisionBox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+    WeaponCollisionBox->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
     WeaponCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     WeaponCollisionBox->SetGenerateOverlapEvents(false);
 }
@@ -57,15 +59,6 @@ void AIFBaseCharacter::Landed(const FHitResult& Hit)
     }
 }
 
-void AIFBaseCharacter::SetWeaponCollisionEnabled(bool bEnabled)
-{
-    if (WeaponCollisionBox)
-    {
-        WeaponCollisionBox->SetGenerateOverlapEvents(bEnabled);
-        WeaponCollisionBox->SetCollisionEnabled(bEnabled ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
-    }
-}
-
 void AIFBaseCharacter::BindGameplayDelegates()
 {
     if (StaminaComponent)
@@ -76,11 +69,6 @@ void AIFBaseCharacter::BindGameplayDelegates()
     if (HealthComponent)
     {
         HealthComponent->OnHealthDepleted.AddDynamic(this, &AIFBaseCharacter::HandleDeath);
-    }
-
-    if (WeaponCollisionBox)
-    {
-        WeaponCollisionBox->OnComponentBeginOverlap.AddDynamic(this, &AIFBaseCharacter::HandleWeaponCollisionBeginOverlap);
     }
 }
 
@@ -95,11 +83,6 @@ void AIFBaseCharacter::UnbindGameplayDelegates()
     {
         HealthComponent->OnHealthDepleted.RemoveAll(this);
     }
-
-    if (WeaponCollisionBox)
-    {
-        WeaponCollisionBox->OnComponentBeginOverlap.RemoveAll(this);
-    }
 }
 
 void AIFBaseCharacter::ClearReviveTimer()
@@ -107,14 +90,6 @@ void AIFBaseCharacter::ClearReviveTimer()
     if (UWorld* const World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(ReviveTimerHandle);
-    }
-}
-
-void AIFBaseCharacter::HandleWeaponCollisionBeginOverlap(UPrimitiveComponent* /*OverlappedComponent*/, AActor* OtherActor, UPrimitiveComponent* /*OtherComp*/, int32 /*OtherBodyIndex*/, bool /*bFromSweep*/, const FHitResult& /*SweepResult*/)
-{
-    if (CombatComponent)
-    {
-        CombatComponent->HandleWeaponCollisionOverlap(OtherActor);
     }
 }
 
@@ -131,7 +106,7 @@ void AIFBaseCharacter::HandleStaminaDepleted()
 
 void AIFBaseCharacter::HandleDeath()
 {
-    if (!CombatComponent || CombatComponent->GetCombatState() == ECombatState::Dead)
+    if (!CombatComponent || CombatComponent->IsDead())
     {
         return;
     }
@@ -139,8 +114,7 @@ void AIFBaseCharacter::HandleDeath()
     ClearReviveTimer();
     ClearLifecycleMontageDelegates();
 
-    CombatComponent->SetCombatState(ECombatState::Dead);
-    CombatComponent->ResetCombatState();
+    CombatComponent->HandleOwnerDeath();
 
     if (UAnimInstance* const AnimInstance = GetMeshAnimInstance())
     {
@@ -231,7 +205,7 @@ void AIFBaseCharacter::AttemptRevive()
     // Grant temporary invincibility to prevent taking damage during the get-up animation.
     HealthComponent->SetInvincible(true);
 
-    CombatComponent->SetCombatState(ECombatState::Idle);
+    CombatComponent->HandleOwnerRevived();
 
     if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
     {
@@ -268,20 +242,6 @@ UAnimInstance* AIFBaseCharacter::GetMeshAnimInstance() const
 void AIFBaseCharacter::ClearLifecycleMontageDelegates() const
 {
     UAnimInstance* const AnimInstance = GetMeshAnimInstance();
-    if (!AnimInstance)
-    {
-        return;
-    }
-
-    FOnMontageEnded EmptyDelegate;
-    if (DeathMontage)
-    {
-        AnimInstance->Montage_SetEndDelegate(EmptyDelegate, DeathMontage);
-    }
-
-    if (GetUpMontage)
-    {
-        AnimInstance->Montage_SetEndDelegate(EmptyDelegate, GetUpMontage);
-    }
+    IF::AnimMontageUtils::ClearMontageEndDelegate(AnimInstance, DeathMontage);
+    IF::AnimMontageUtils::ClearMontageEndDelegate(AnimInstance, GetUpMontage);
 }
-
