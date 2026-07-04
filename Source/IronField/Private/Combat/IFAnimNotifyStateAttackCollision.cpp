@@ -1,13 +1,13 @@
-#include "Combat/AnimNotifyStateAttackCollision.h"
+#include "Combat/IFAnimNotifyStateAttackCollision.h"
 
-#include "Combat/CombatComponent.h"
+#include "Combat/IFCombatComponent.h"
 #include "GameFramework/Actor.h"
 
 void UIFAnimNotifyStateAttackCollision::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
     Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
 
-    if (!MeshComp || Damage <= 0.f)
+    if (!MeshComp)
     {
         return;
     }
@@ -20,7 +20,7 @@ void UIFAnimNotifyStateAttackCollision::NotifyBegin(USkeletalMeshComponent* Mesh
 
     if (UIFCombatComponent* const Combat = Owner->FindComponentByClass<UIFCombatComponent>())
     {
-        Combat->BeginAttackCollision(Damage, DamageTypeClass);
+        Combat->BeginAttackCollision();
     }
 }
 

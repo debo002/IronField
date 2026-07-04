@@ -2,13 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimNotifies/AnimNotifyState.h"
-#include "AnimNotifyStateAttackCollision.generated.h"
-
-class UDamageType;
+#include "IFAnimNotifyStateAttackCollision.generated.h"
 
 /**
- * Animation notify state controlling weapon attack collision windows.
- * Directly interacts with the combat component to enable and disable active overlaps.
+ * Marks the swing window of an attack animation - collision turns on at NotifyBegin and off at
+ * NotifyEnd. Carries no damage data; that lives on the combo step or spin attack instead.
  */
 UCLASS()
 class IRONFIELD_API UIFAnimNotifyStateAttackCollision : public UAnimNotifyState
@@ -19,11 +17,4 @@ public:
     virtual void NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, float TotalDuration, const FAnimNotifyEventReference& EventReference) override;
 
     virtual void NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference) override;
-
-private:
-    UPROPERTY(EditAnywhere, Category = "Combat|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
-    float Damage = 20.f;
-
-    UPROPERTY(EditAnywhere, Category = "Combat|Damage", meta = (AllowPrivateAccess = "true"))
-    TSubclassOf<UDamageType> DamageTypeClass;
 };

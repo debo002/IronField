@@ -1,11 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Character/BaseCharacter.h"
-#include "Combat/CombatTypes.h"
+#include "Character/IFBaseCharacter.h"
+#include "Combat/IFCombatTypes.h"
 #include "InputActionValue.h"
-#include "PlayerCharacter.generated.h"
+#include "IFPlayerCharacter.generated.h"
 
+class UAnimMontage;
 class UCameraComponent;
 class UEnhancedInputComponent;
 class UInputAction;
@@ -14,8 +15,7 @@ class USpringArmComponent;
 class UIFPlayerCombatComponent;
 
 /**
- * Main character class controlled by the player.
- * Handles local input bindings, movement speed transitions, and stamina-draining actions.
+ * Represents the playable character controlled by the user.
  */
 UCLASS()
 class IRONFIELD_API AIFPlayerCharacter : public AIFBaseCharacter
@@ -91,21 +91,21 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float AttackMoveSpeed = 260.f;
 
+    // Dot product threshold to detect if the movement input direction qualifies as "sprinting forward".
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float SprintInputThreshold = 0.5f;
 
+    // Input magnitude threshold to determine if the player is backpedaling (should be negative).
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float BackpedalInputThreshold = -0.1f;
 
-    /** Velocity-squared threshold below which sprinting automatically stops. */
+    // Squared speed threshold to determine if the player has decelerated enough to stop sprinting.
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float SprintExitSpeedSquared = 100.f;
 
-    /** Stamina consumed per second while sprinting. */
     UPROPERTY(EditDefaultsOnly, Category = "Player|Stamina")
     float SprintStaminaDrainRate = 10.f;
 
-    /** Minimum stamina required to initiate a sprint. */
     UPROPERTY(EditDefaultsOnly, Category = "Player|Stamina")
     float MinimumStaminaToStartSprint = 1.f;
 
@@ -121,15 +121,26 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     FVector DeathCameraSocketOffset = FVector(0.f, 45.f, 110.f);
 
-    /** Speed at which the camera transitions to/from the death view. */
+    // Interpolation speed for smooth camera transitions between states (e.g., alive to death).
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     float CameraTransitionInterpSpeed = 3.f;
 
+    UPROPERTY(EditDefaultsOnly, Category = "Player|Animation")
+    TObjectPtr<UAnimMontage> GetUpMontage;
+
+    // Time to wait on the ground, dead, before getting back up.
+    UPROPERTY(EditDefaultsOnly, Category = "Player|Gameplay")
+    float ReviveDelaySeconds = 10.f;
+
     virtual void OnDeathStarted() override;
+
+    // Called once the death montage finishes - starts the revive countdown.
+    virtual void OnDeathMontageFinished() override;
 
     virtual void OnStaminaDepleted() override;
 
-    virtual void OnReviveFinished() override;
+    // Called once revive fully completes (after the get-up montage finishes).
+    void OnReviveFinished();
 
 private:
     UPROPERTY(VisibleAnywhere, Category = "Player|Components", meta = (AllowPrivateAccess = "true"))
@@ -168,4 +179,14 @@ private:
 
     void TickCameraTransition(float DeltaTime);
     void UpdateTickEnabled();
+
+    UFUNCTION()
+    void HandleGetUpMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+    void ClearReviveTimer();
+    void StartReviveTimer();
+    void AttemptRevive();
+    void CompleteRevive();
+
+    FTimerHandle ReviveTimerHandle;
 };

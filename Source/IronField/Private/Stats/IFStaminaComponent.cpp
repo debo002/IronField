@@ -1,9 +1,9 @@
-#include "Stats/StaminaComponent.h"
+#include "Stats/IFStaminaComponent.h"
 
 UIFStaminaComponent::UIFStaminaComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
-    // Component tick is enabled dynamically only during active drain or regeneration to save CPU time.
+    
     PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
@@ -60,7 +60,8 @@ void UIFStaminaComponent::BeginPlay()
     StaminaRegenDelay = FMath::Max(0.f, StaminaRegenDelay);
 
     CurrentStamina = MaxStamina;
-    // Start the timer pre-expired so stamina can regenerate immediately if consumed right away.
+    
+    // Initialize to delay to prevent immediate regeneration on spawn
     TimeSinceLastStaminaDrain = StaminaRegenDelay;
     ContinuousDrainRate = 0.f;
 

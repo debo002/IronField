@@ -2,11 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "IronFieldGameMode.generated.h"
+#include "IFGameMode.generated.h"
 
 /**
- * Root game mode for the project.
- * Extend this class to add match rules, default pawn assignments, and session logic.
+ * Defines the game mode, managing game rules and player spawns.
  */
 UCLASS()
 class IRONFIELD_API AIFGameMode : public AGameModeBase

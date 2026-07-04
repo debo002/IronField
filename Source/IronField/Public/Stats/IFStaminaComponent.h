@@ -1,13 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Combat/CombatTypes.h"
+#include "Combat/IFCombatTypes.h"
 #include "Components/ActorComponent.h"
-#include "StaminaComponent.generated.h"
+#include "IFStaminaComponent.generated.h"
 
 /**
- * Actor component managing character stamina mechanics.
- * Supports continuous stamina drain operations and time-delayed automatic regeneration.
+ * Manages stamina-based resource usage, including consumption, regeneration, and continuous drainage.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFStaminaComponent : public UActorComponent
@@ -23,11 +22,9 @@ public:
     UPROPERTY(BlueprintAssignable, Category = "Stamina|Events")
     FOnStaminaChanged OnStaminaChanged;
 
-    /** Attempts to consume a flat amount of stamina. Returns false if insufficient. */
     UFUNCTION(BlueprintCallable, Category = "Stamina|Actions")
     bool TryConsumeStamina(float Amount);
 
-    /** Initiates a continuous stamina drain at the specified rate per second. */
     UFUNCTION(BlueprintCallable, Category = "Stamina|Actions")
     void StartContinuousDrain(float DrainRate);
 
@@ -48,19 +45,22 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float MaxStamina = 100.f;
 
+        // Amount of stamina recovered per second after the delay has passed.
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float StaminaRegenRate = 20.f;
 
-    /** Seconds after the last drain event before regeneration resumes. */
+    // Time in seconds to wait after stamina consumption before regeneration begins.
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float StaminaRegenDelay = 3.5f;
 
     UPROPERTY(VisibleInstanceOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float CurrentStamina = 0.f;
 
+    // Timer tracking elapsed time since last drain to determine when to start regeneration.
     UPROPERTY(VisibleInstanceOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float TimeSinceLastStaminaDrain = 0.f;
 
+    // Rate of stamina loss per second when continuous draining is active (e.g., sprinting).
     UPROPERTY(VisibleInstanceOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float ContinuousDrainRate = 0.f;
 
@@ -72,7 +72,6 @@ private:
     void EnableStaminaTick();
     void DisableStaminaTick();
 
-    /** Clamps and applies a new stamina value, broadcasting OnStaminaChanged and OnStaminaDepleted as needed. */
     void SetStaminaClamped(float NewStamina);
 
     void BroadcastStaminaChangedIfNeeded(float PreviousStamina);

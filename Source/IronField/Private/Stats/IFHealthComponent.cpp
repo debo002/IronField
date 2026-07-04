@@ -1,4 +1,4 @@
-#include "Stats/HealthComponent.h"
+#include "Stats/IFHealthComponent.h"
 
 #include "GameFramework/Actor.h"
 
@@ -49,7 +49,6 @@ void UIFHealthComponent::BeginPlay()
 {
     Super::BeginPlay();
 
-    // Floor of 1 prevents division by zero in GetHealthPercent.
     MaxHealth = FMath::Max(1.f, MaxHealth);
     CurrentHealth = MaxHealth;
     bIsDead = false;
@@ -72,7 +71,7 @@ void UIFHealthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
     }
 }
 
-void UIFHealthComponent::HandleOwnerTakeAnyDamage(AActor* /*DamagedActor*/, float Damage, const UDamageType* /*DamageType*/, AController* /*InstigatedBy*/, AActor* /*DamageCauser*/)
+void UIFHealthComponent::HandleOwnerTakeAnyDamage(AActor* , float Damage, const UDamageType* , AController* , AActor* )
 {
     ApplyDamage(Damage);
 }

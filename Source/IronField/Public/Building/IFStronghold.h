@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Stronghold.generated.h"
+#include "IFStronghold.generated.h"
 
 class UStaticMeshComponent;
 class USceneComponent;
@@ -12,6 +12,9 @@ class UNiagaraSystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStrongholdDestroyed, AIFStronghold*, Stronghold);
 
+/**
+ * Represents a stronghold building that can be captured or defended.
+ */
 UCLASS()
 class IRONFIELD_API AIFStronghold : public AActor
 {
@@ -20,7 +23,6 @@ class IRONFIELD_API AIFStronghold : public AActor
 public:
 	AIFStronghold();
 
-	/** Returns the health component for external queries (e.g. WaveManager, UI). */
 	UFUNCTION(BlueprintPure, Category = "Stronghold|Components")
 	UIFHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
@@ -29,6 +31,8 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stronghold|Components")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;

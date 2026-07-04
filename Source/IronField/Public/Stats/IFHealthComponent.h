@@ -1,13 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Combat/CombatTypes.h"
+#include "Combat/IFCombatTypes.h"
 #include "Components/ActorComponent.h"
-#include "HealthComponent.generated.h"
+#include "IFHealthComponent.generated.h"
 
 /**
- * Actor component managing character damage, healing, and survival state.
- * Dispatches events upon health changes, death, and invincibility triggers.
+ * Manages health-related logic, damage application, and death state for an actor.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFHealthComponent : public UActorComponent
@@ -32,7 +31,6 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Health|Actions")
     void Revive();
 
-    /** Enables or disables damage invincibility, used during spawning and revival. */
     UFUNCTION(BlueprintCallable, Category = "Health|Actions")
     void SetInvincible(bool bNewInvincible) { bIsInvincible = bNewInvincible; }
 
@@ -53,6 +51,7 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
     float MaxHealth = 100.f;
 
+    // Health value to which the character is restored upon revival.
     UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
     float ReviveHealth = 30.f;
 
@@ -68,7 +67,6 @@ private:
     UFUNCTION()
     void HandleOwnerTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser);
 
-    /** Clamps and applies a new health value, broadcasting OnHealthChanged if it actually changed. */
     void SetHealthClamped(float NewHealth);
 
     void BroadcastHealthChangedIfNeeded(float PreviousHealth);

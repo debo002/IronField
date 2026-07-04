@@ -1,12 +1,16 @@
-#include "Character/PlayerCharacter.h"
+#include "Character/IFPlayerCharacter.h"
+#include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
-#include "Stats/HealthComponent.h"
-#include "Combat/PlayerCombatComponent.h"
-#include "Stats/StaminaComponent.h"
+#include "Combat/IFCombatComponent.h"
+#include "Combat/IFPlayerCombatComponent.h"
+#include "Core/IFAnimMontageUtils.h"
+#include "Stats/IFHealthComponent.h"
+#include "Stats/IFStaminaComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "TimerManager.h"
 
 AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializer)
     : Super(ObjectInitializer.SetDefaultSubobjectClass<UIFPlayerCombatComponent>(TEXT("Combat")))
@@ -112,6 +116,9 @@ void AIFPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
     Super::EndPlay(EndPlayReason);
 
+    ClearReviveTimer();
+    ClearMontageEndDelegate(GetMeshAnimInstance(), GetUpMontage);
+
     StopSprint();
 
     if (UIFCombatComponent* const Combat = GetCombatComponent())
@@ -191,9 +198,86 @@ void AIFPlayerCharacter::OnDeathStarted()
     UpdateTickEnabled();
 }
 
+void AIFPlayerCharacter::OnDeathMontageFinished()
+{
+    StartReviveTimer();
+}
+
 void AIFPlayerCharacter::OnStaminaDepleted()
 {
     StopSprint();
+}
+
+void AIFPlayerCharacter::ClearReviveTimer()
+{
+    if (UWorld* const World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(ReviveTimerHandle);
+    }
+}
+
+void AIFPlayerCharacter::StartReviveTimer()
+{
+    UWorld* const World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    // "false" means don't loop - revive should only trigger once per death.
+    World->GetTimerManager().SetTimer(ReviveTimerHandle, this, &AIFPlayerCharacter::AttemptRevive, ReviveDelaySeconds, false);
+}
+
+void AIFPlayerCharacter::AttemptRevive()
+{
+    UIFHealthComponent* const Health = GetHealthComponent();
+    UIFCombatComponent* const Combat = GetCombatComponent();
+    if (!Health || !Combat)
+    {
+        return;
+    }
+
+    Health->Revive();
+    Health->SetInvincible(true);
+    Combat->HandleOwnerRevived();
+
+    if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
+    {
+        Movement->SetMovementMode(MOVE_Walking);
+    }
+
+    UAnimInstance* const AnimInstance = GetMeshAnimInstance();
+    if (GetUpMontage && AnimInstance && PlayAnimMontage(GetUpMontage) > 0.f)
+    {
+        FOnMontageEnded EndDelegate;
+        EndDelegate.BindUObject(this, &AIFPlayerCharacter::HandleGetUpMontageEnded);
+        AnimInstance->Montage_SetEndDelegate(EndDelegate, GetUpMontage);
+    }
+    else
+    {
+        CompleteRevive();
+    }
+}
+
+void AIFPlayerCharacter::HandleGetUpMontageEnded(UAnimMontage* Montage, bool )
+{
+    if (Montage != GetUpMontage)
+    {
+        return;
+    }
+
+    ClearMontageEndDelegate(GetMeshAnimInstance(), GetUpMontage);
+    CompleteRevive();
+}
+
+void AIFPlayerCharacter::CompleteRevive()
+{
+    if (UIFHealthComponent* const Health = GetHealthComponent())
+    {
+        Health->SetInvincible(false);
+    }
+
+    OnReviveFinished();
 }
 
 void AIFPlayerCharacter::OnReviveFinished()
@@ -369,7 +453,7 @@ void AIFPlayerCharacter::StopSpinAttack()
     }
 }
 
-void AIFPlayerCharacter::HandleCombatStateChanged(ECombatState /*PreviousState*/, ECombatState /*NewState*/)
+void AIFPlayerCharacter::HandleCombatStateChanged(ECombatState , ECombatState )
 {
     UpdateMovementSpeed();
 }

@@ -1,5 +1,5 @@
-#include "Building/Stronghold.h"
-#include "Stats/HealthComponent.h"
+#include "Building/IFStronghold.h"
+#include "Stats/IFHealthComponent.h"
 #include "NiagaraFunctionLibrary.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -26,9 +26,19 @@ void AIFStronghold::BeginPlay()
 	}
 }
 
+void AIFStronghold::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnHealthChanged.RemoveAll(this);
+		HealthComponent->OnHealthDepleted.RemoveAll(this);
+	}
+}
+
 void AIFStronghold::HandleHealthChanged(float Percent)
 {
-	// The killing blow's feedback is played by HandleDeath instead, to avoid double-firing sound/VFX.
 	if (Percent <= 0.0f)
 	{
 		return;
@@ -60,7 +70,6 @@ void AIFStronghold::HandleDestruction()
 {
 	OnStrongholdDestroyed.Broadcast(this);
 
-	// Placeholder destruction visuals until Chaos Fracture (Geometry Collections) replaces this with a real break-apart effect.
 	MeshComponent->SetVisibility(false);
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetActorEnableCollision(false);
