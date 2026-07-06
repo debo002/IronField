@@ -3,9 +3,12 @@
 UIFStaminaComponent::UIFStaminaComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
-    
     PrimaryComponentTick.bStartWithTickEnabled = false;
 }
+
+// ============================================================================
+// Actions
+// ============================================================================
 
 bool UIFStaminaComponent::TryConsumeStamina(float Amount)
 {
@@ -46,10 +49,18 @@ void UIFStaminaComponent::StopContinuousDrain()
     UpdateTickForRegen();
 }
 
+// ============================================================================
+// Queries
+// ============================================================================
+
 float UIFStaminaComponent::GetStaminaPercent() const
 {
     return CurrentStamina / MaxStamina;
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 void UIFStaminaComponent::BeginPlay()
 {
@@ -60,8 +71,8 @@ void UIFStaminaComponent::BeginPlay()
     StaminaRegenDelay = FMath::Max(0.f, StaminaRegenDelay);
 
     CurrentStamina = MaxStamina;
-    
-    // Initialize to delay to prevent immediate regeneration on spawn
+
+    // Initialize to delay to prevent immediate regeneration on spawn.
     TimeSinceLastStaminaDrain = StaminaRegenDelay;
     ContinuousDrainRate = 0.f;
 
@@ -80,6 +91,10 @@ void UIFStaminaComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 
     RegenerateStamina(DeltaTime);
 }
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
 
 bool UIFStaminaComponent::IsDrainingStamina() const
 {

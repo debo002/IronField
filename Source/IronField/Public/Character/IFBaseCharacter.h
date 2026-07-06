@@ -10,6 +10,8 @@ class UIFCombatComponent;
 class UIFHealthComponent;
 class UIFStaminaComponent;
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterDied, AIFBaseCharacter*, Character);
+
 /**
  * Base class for all characters (player and enemies). Handles the shared stuff: health, stamina,
  * combat, the weapon hitbox, and death (play death montage, stop, done). Does not know about
@@ -21,6 +23,9 @@ class IRONFIELD_API AIFBaseCharacter : public ACharacter
 	GENERATED_BODY()
 
 public:
+	UPROPERTY(BlueprintAssignable, Category = "Characters|Events")
+	FOnCharacterDied OnCharacterDied;
+
 	AIFBaseCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 	UFUNCTION(BlueprintPure, Category = "Characters|Components")
@@ -35,16 +40,20 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Characters|Components")
 	UBoxComponent* GetWeaponCollisionBox() const { return WeaponCollisionBox; }
 
+	UFUNCTION(BlueprintPure, Category = "Characters|State")
+	bool IsDead() const;
+
+	UFUNCTION(BlueprintPure, Category = "Characters|State")
+	bool IsBlocking() const;
+
+	UFUNCTION(BlueprintPure, Category = "Characters|State")
+	bool IsAttacking() const;
+
 	virtual void BeginPlay() override;
-
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
 	virtual void Landed(const FHitResult& Hit) override;
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "Characters|Animation")
-	TObjectPtr<UAnimMontage> DeathMontage;
-
 	// Blend-out time for whatever montage was playing when death happens.
 	UPROPERTY(EditDefaultsOnly, Category = "Characters|Animation")
 	float DeathMontageBlendOutTime = 0.15f;
@@ -64,7 +73,6 @@ protected:
 	virtual void OnStaminaDepleted() {}
 
 	UAnimInstance* GetMeshAnimInstance() const;
-	void ClearLifecycleMontageDelegates() const;
 
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Characters|Components", meta = (AllowPrivateAccess = "true"))
@@ -85,9 +93,10 @@ private:
 	UFUNCTION()
 	void HandleDeath();
 
-	UFUNCTION()
-	void HandleDeathMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-
 	void BindGameplayDelegates();
 	void UnbindGameplayDelegates();
+
+	// Death helpers - split out of HandleDeath so each step reads on its own.
+	void StopMovementForDeath();
+	void DisableCollisionForDeath();
 };

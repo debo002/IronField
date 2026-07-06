@@ -28,20 +28,17 @@ public:
     UFUNCTION(BlueprintPure, Category = "Player|Movement")
     bool IsSprinting() const { return bIsSprinting; }
 
-    UFUNCTION(BlueprintPure, Category = "Player|Movement")
-    bool IsBlocking() const;
-
     UFUNCTION(BlueprintPure, Category = "Player|Health")
     float GetHealthPercent() const;
-
-    UFUNCTION(BlueprintPure, Category = "Player|Health")
-    bool IsDead() const;
 
     UFUNCTION(BlueprintPure, Category = "Player|Stamina")
     float GetStaminaPercent() const;
 
-    UFUNCTION(BlueprintPure, Category = "Player|Combat")
-    bool IsAttacking() const;
+    UFUNCTION(BlueprintPure, Category = "Player|State")
+    bool IsGettingUp() const { return bIsGettingUp; }
+
+    UFUNCTION(BlueprintCallable, Category = "Player|State")
+    void NotifyGetUpFinished();
 
     virtual void BeginPlay() override;
 
@@ -50,6 +47,7 @@ public:
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
     virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+    virtual void Jump() override;
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "Player|Input")
@@ -110,27 +108,40 @@ protected:
     float MinimumStaminaToStartSprint = 1.f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
-    float NormalCameraArmLength = 400.f;
+    float NormalCameraArmLength = 700.f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
-    FVector NormalCameraSocketOffset = FVector(0.f, 45.f, 70.f);
+    FVector NormalCameraSocketOffset = FVector(0.f, 0.f, 80.f);
 
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
-    float DeathCameraArmLength = 500.f;
+    float DeathCameraArmLength = 800.f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
-    FVector DeathCameraSocketOffset = FVector(0.f, 45.f, 110.f);
+    FVector DeathCameraSocketOffset = FVector(0.f, 0.f, 120.f);
 
     // Interpolation speed for smooth camera transitions between states (e.g., alive to death).
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     float CameraTransitionInterpSpeed = 3.f;
 
-    UPROPERTY(EditDefaultsOnly, Category = "Player|Animation")
-    TObjectPtr<UAnimMontage> GetUpMontage;
+    // Fixed pitch for the top-down camera boom (negative = looking downward).
+    UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
+    float CameraBoomPitch = -52.f;
+
+    // Spring arm camera lag speed (higher = snappier follow).
+    UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
+    float CameraLagSpeed = 10.f;
+
+    // Spring arm rotation lag speed.
+    UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
+    float CameraRotationLagSpeed = 12.f;
 
     // Time to wait on the ground, dead, before getting back up.
     UPROPERTY(EditDefaultsOnly, Category = "Player|Gameplay")
     float ReviveDelaySeconds = 10.f;
+
+    // Fallback duration to wait during get-up animation before giving control back to the player.
+    UPROPERTY(EditDefaultsOnly, Category = "Player|Gameplay")
+    float GetUpDuration = 2.5f;
 
     virtual void OnDeathStarted() override;
 
@@ -139,7 +150,7 @@ protected:
 
     virtual void OnStaminaDepleted() override;
 
-    // Called once revive fully completes (after the get-up montage finishes).
+    // Called once revive fully completes (after the get-up animation finishes).
     void OnReviveFinished();
 
 private:
@@ -157,6 +168,9 @@ private:
 
     UPROPERTY(VisibleInstanceOnly, Category = "Player|Movement", meta = (AllowPrivateAccess = "true"))
     FVector2D CachedMovementInput = FVector2D::ZeroVector;
+
+    UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Player|State", meta = (AllowPrivateAccess = "true"))
+    bool bIsGettingUp = false;
 
     void Move(const FInputActionValue& Value);
     void StopMoving();
@@ -179,9 +193,6 @@ private:
 
     void TickCameraTransition(float DeltaTime);
     void UpdateTickEnabled();
-
-    UFUNCTION()
-    void HandleGetUpMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 
     void ClearReviveTimer();
     void StartReviveTimer();

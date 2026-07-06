@@ -6,7 +6,9 @@
 #include "IFHealthComponent.generated.h"
 
 /**
- * Manages health-related logic, damage application, and death state for an actor.
+ * Manages health, damage application, and death state for an actor.
+ * Listens to the owner's OnTakeAnyDamage so any damage source (melee, environment, etc.)
+ * funnels through ApplyDamage automatically.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFHealthComponent : public UActorComponent
@@ -44,7 +46,6 @@ public:
     bool IsInvincible() const { return bIsInvincible; }
 
     virtual void BeginPlay() override;
-
     virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
@@ -68,6 +69,5 @@ private:
     void HandleOwnerTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser);
 
     void SetHealthClamped(float NewHealth);
-
     void BroadcastHealthChangedIfNeeded(float PreviousHealth);
 };

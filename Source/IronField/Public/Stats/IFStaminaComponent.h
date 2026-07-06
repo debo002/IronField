@@ -6,7 +6,9 @@
 #include "IFStaminaComponent.generated.h"
 
 /**
- * Manages stamina-based resource usage, including consumption, regeneration, and continuous drainage.
+ * Manages stamina: one-shot consumption (attacks, blocks), continuous drain (sprint, spin,
+ * holding block), and regeneration after a delay. Tick is only enabled while stamina is
+ * actively draining or regenerating - it's off the rest of the time.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFStaminaComponent : public UActorComponent
@@ -38,14 +40,13 @@ public:
     bool HasStamina(float MinimumAmount) const { return CurrentStamina >= MinimumAmount; }
 
     virtual void BeginPlay() override;
-
     virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 private:
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float MaxStamina = 100.f;
 
-        // Amount of stamina recovered per second after the delay has passed.
+    // Amount of stamina recovered per second after the delay has passed.
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float StaminaRegenRate = 20.f;
 
@@ -73,7 +74,6 @@ private:
     void DisableStaminaTick();
 
     void SetStaminaClamped(float NewStamina);
-
     void BroadcastStaminaChangedIfNeeded(float PreviousStamina);
     void BroadcastStaminaDepletedIfNeeded(float PreviousStamina);
 };

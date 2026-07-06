@@ -8,7 +8,8 @@ class UDamageType;
 
 /**
  * Adds the player-only spin attack on top of the base combat component. The spin attack is a
- * "hold to keep spinning" move, so it's handled outside the normal combo system.
+ * "hold to keep spinning" move - it loops via montage sections rather than the combo system,
+ * so it's handled entirely outside StartAttack/ComboSteps.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFPlayerCombatComponent : public UIFCombatComponent
@@ -38,6 +39,7 @@ protected:
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override;
 
 private:
+	//~ Begin Configured
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAnimMontage> SpinAttackMontage;
 
@@ -68,6 +70,7 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Damage", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UDamageType> SpinDamageTypeClass;
+	//~ End Configured
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Combat|State", meta = (AllowPrivateAccess = "true"))
 	bool bIsSpinning = false;

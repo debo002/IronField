@@ -4,6 +4,10 @@
 #include "Core/IFAnimMontageUtils.h"
 #include "Stats/IFStaminaComponent.h"
 
+// ============================================================================
+// Actions
+// ============================================================================
+
 void UIFPlayerCombatComponent::StartSpinAttack()
 {
 	if (bIsSpinning || !IsIdle() || !HasUsableStamina(MinimumStaminaToStartSpin))
@@ -23,6 +27,7 @@ void UIFPlayerCombatComponent::StartSpinAttack()
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	if (!AnimInstance || !SpinAttackMontage || AnimInstance->Montage_Play(SpinAttackMontage) <= 0.f)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("[IF-Combat] %s could not start spin attack - missing AnimInstance or SpinAttackMontage."), *GetNameSafe(GetOwner()));
 		StopSpinImmediately();
 		RestoreIdleStateUnlessDead();
 		return;
@@ -47,6 +52,10 @@ void UIFPlayerCombatComponent::StopSpinAttack()
 
 	StopSpinGracefully();
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 void UIFPlayerCombatComponent::BeginPlay()
 {
@@ -76,6 +85,10 @@ void UIFPlayerCombatComponent::ResetCombatState()
 	Super::ResetCombatState();
 }
 
+// ============================================================================
+// Queries (overrides)
+// ============================================================================
+
 float UIFPlayerCombatComponent::GetCurrentAttackDamage() const
 {
 	return bIsSpinning ? SpinDamage : Super::GetCurrentAttackDamage();
@@ -85,6 +98,10 @@ TSubclassOf<UDamageType> UIFPlayerCombatComponent::GetCurrentDamageTypeClass() c
 {
 	return bIsSpinning ? SpinDamageTypeClass : Super::GetCurrentDamageTypeClass();
 }
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
 
 void UIFPlayerCombatComponent::StopSpinGracefully()
 {

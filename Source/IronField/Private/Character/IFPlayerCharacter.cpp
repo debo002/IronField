@@ -1,6 +1,7 @@
 #include "Character/IFPlayerCharacter.h"
 #include "Animation/AnimInstance.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Combat/IFCombatComponent.h"
 #include "Combat/IFPlayerCombatComponent.h"
 #include "Core/IFAnimMontageUtils.h"
@@ -23,7 +24,14 @@ AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializ
     CameraBoom->TargetArmLength = NormalCameraArmLength;
     CameraBoom->SocketOffset = NormalCameraSocketOffset;
     CameraBoom->bUsePawnControlRotation = true;
+    CameraBoom->bInheritPitch = false;
+    CameraBoom->bInheritYaw = true;
+    CameraBoom->bInheritRoll = false;
+    CameraBoom->SetRelativeRotation(FRotator(CameraBoomPitch, 0.f, 0.f));
     CameraBoom->bEnableCameraLag = true;
+    CameraBoom->CameraLagSpeed = CameraLagSpeed;
+    CameraBoom->bEnableCameraRotationLag = true;
+    CameraBoom->CameraRotationLagSpeed = CameraRotationLagSpeed;
 
     FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
     FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
@@ -31,17 +39,6 @@ AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializ
 
     bUseControllerRotationYaw = true;
     GetCharacterMovement()->bOrientRotationToMovement = false;
-}
-
-bool AIFPlayerCharacter::IsBlocking() const
-{
-    const UIFCombatComponent* const Combat = GetCombatComponent();
-    if (!Combat)
-    {
-        return false;
-    }
-
-    return Combat->IsBlocking();
 }
 
 float AIFPlayerCharacter::GetHealthPercent() const
@@ -55,17 +52,6 @@ float AIFPlayerCharacter::GetHealthPercent() const
     return Health->GetHealthPercent();
 }
 
-bool AIFPlayerCharacter::IsDead() const
-{
-    const UIFHealthComponent* const Health = GetHealthComponent();
-    if (!Health)
-    {
-        return false;
-    }
-
-    return Health->IsDead();
-}
-
 float AIFPlayerCharacter::GetStaminaPercent() const
 {
     const UIFStaminaComponent* const Stamina = GetStaminaComponent();
@@ -75,17 +61,6 @@ float AIFPlayerCharacter::GetStaminaPercent() const
     }
 
     return Stamina->GetStaminaPercent();
-}
-
-bool AIFPlayerCharacter::IsAttacking() const
-{
-    const UIFCombatComponent* const Combat = GetCombatComponent();
-    if (!Combat)
-    {
-        return false;
-    }
-
-    return Combat->IsAttacking();
 }
 
 void AIFPlayerCharacter::BeginPlay()
@@ -117,7 +92,6 @@ void AIFPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
     Super::EndPlay(EndPlayReason);
 
     ClearReviveTimer();
-    ClearMontageEndDelegate(GetMeshAnimInstance(), GetUpMontage);
 
     StopSprint();
 
@@ -158,7 +132,7 @@ void AIFPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 
         if (JumpInputAction)
         {
-            EnhancedInputComponent->BindAction(JumpInputAction, ETriggerEvent::Started, this, &ACharacter::Jump);
+            EnhancedInputComponent->BindAction(JumpInputAction, ETriggerEvent::Started, this, &AIFPlayerCharacter::Jump);
             EnhancedInputComponent->BindAction(JumpInputAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
         }
 
@@ -188,6 +162,16 @@ void AIFPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
             EnhancedInputComponent->BindAction(SpinAttackInputAction, ETriggerEvent::Canceled, this, &AIFPlayerCharacter::StopSpinAttack);
         }
     }
+}
+
+void AIFPlayerCharacter::Jump()
+{
+    if (IsDead() || IsGettingUp())
+    {
+        return;
+    }
+
+    Super::Jump();
 }
 
 void AIFPlayerCharacter::OnDeathStarted()
@@ -241,37 +225,53 @@ void AIFPlayerCharacter::AttemptRevive()
     Health->SetInvincible(true);
     Combat->HandleOwnerRevived();
 
+    // Restore capsule collision immediately so the character doesn't fall through the floor
+    UCapsuleComponent* const Capsule = GetCapsuleComponent();
+    if (Capsule)
+    {
+        Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        Capsule->SetCollisionProfileName(FName("Pawn"));
+        Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+    }
+
+    // Also restore skeletal mesh collision
+    USkeletalMeshComponent* const LocalMesh = GetMesh();
+    if (LocalMesh)
+    {
+        LocalMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+        LocalMesh->SetCollisionProfileName(FName("CharacterMesh"));
+        LocalMesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+    }
+
     if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
     {
         Movement->SetMovementMode(MOVE_Walking);
     }
 
-    UAnimInstance* const AnimInstance = GetMeshAnimInstance();
-    if (GetUpMontage && AnimInstance && PlayAnimMontage(GetUpMontage) > 0.f)
+    // Visual get-up is now handled by the AnimBP State Machine.
+    bIsGettingUp = true;
+
+    // Fallback timer to ensure player doesn't get stuck if NotifyGetUpFinished is not called by AnimBP
+    UWorld* const World = GetWorld();
+    if (World)
     {
-        FOnMontageEnded EndDelegate;
-        EndDelegate.BindUObject(this, &AIFPlayerCharacter::HandleGetUpMontageEnded);
-        AnimInstance->Montage_SetEndDelegate(EndDelegate, GetUpMontage);
+        FTimerHandle GetUpFallbackTimerHandle;
+        World->GetTimerManager().SetTimer(GetUpFallbackTimerHandle, this, &AIFPlayerCharacter::NotifyGetUpFinished, GetUpDuration, false);
     }
-    else
+}
+
+void AIFPlayerCharacter::NotifyGetUpFinished()
+{
+    if (bIsGettingUp)
     {
         CompleteRevive();
     }
 }
 
-void AIFPlayerCharacter::HandleGetUpMontageEnded(UAnimMontage* Montage, bool )
-{
-    if (Montage != GetUpMontage)
-    {
-        return;
-    }
-
-    ClearMontageEndDelegate(GetMeshAnimInstance(), GetUpMontage);
-    CompleteRevive();
-}
-
 void AIFPlayerCharacter::CompleteRevive()
 {
+    bIsGettingUp = false;
+
     if (UIFHealthComponent* const Health = GetHealthComponent())
     {
         Health->SetInvincible(false);
@@ -320,7 +320,7 @@ void AIFPlayerCharacter::UpdateTickEnabled()
 
 void AIFPlayerCharacter::Move(const FInputActionValue& Value)
 {
-    if (!Controller || IsDead())
+    if (!Controller || IsDead() || IsGettingUp())
     {
         return;
     }
@@ -351,7 +351,7 @@ void AIFPlayerCharacter::Look(const FInputActionValue& Value)
 
 void AIFPlayerCharacter::StartSprint()
 {
-    if (bIsSprinting)
+    if (bIsSprinting || IsGettingUp())
     {
         return;
     }
@@ -394,7 +394,7 @@ void AIFPlayerCharacter::StopSprint()
 
 void AIFPlayerCharacter::Attack()
 {
-    if (IsDead())
+    if (IsDead() || IsGettingUp())
     {
         return;
     }
@@ -409,7 +409,7 @@ void AIFPlayerCharacter::Attack()
 
 void AIFPlayerCharacter::StartBlock()
 {
-    if (IsDead())
+    if (IsDead() || IsGettingUp())
     {
         return;
     }
@@ -432,7 +432,7 @@ void AIFPlayerCharacter::StopBlock()
 
 void AIFPlayerCharacter::StartSpinAttack()
 {
-    if (IsDead())
+    if (IsDead() || IsGettingUp())
     {
         return;
     }

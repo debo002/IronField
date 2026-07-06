@@ -7,6 +7,10 @@ UIFHealthComponent::UIFHealthComponent()
     PrimaryComponentTick.bCanEverTick = false;
 }
 
+// ============================================================================
+// Actions
+// ============================================================================
+
 void UIFHealthComponent::ApplyDamage(float Amount)
 {
     if (bIsDead || bIsInvincible || Amount <= 0.f)
@@ -40,10 +44,18 @@ void UIFHealthComponent::Revive()
     OnHealthChanged.Broadcast(GetHealthPercent());
 }
 
+// ============================================================================
+// Queries
+// ============================================================================
+
 float UIFHealthComponent::GetHealthPercent() const
 {
     return CurrentHealth / MaxHealth;
 }
+
+// ============================================================================
+// Lifecycle
+// ============================================================================
 
 void UIFHealthComponent::BeginPlay()
 {
@@ -70,6 +82,10 @@ void UIFHealthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
         Owner->OnTakeAnyDamage.RemoveAll(this);
     }
 }
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
 
 void UIFHealthComponent::HandleOwnerTakeAnyDamage(AActor* , float Damage, const UDamageType* , AController* , AActor* )
 {
