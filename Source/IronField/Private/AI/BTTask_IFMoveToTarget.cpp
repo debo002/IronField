@@ -1,10 +1,23 @@
 #include "AI/BTTask_IFMoveToTarget.h"
 
 #include "AIController.h"
-#include "Building/IFStronghold.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
+#include "Core/IFAttackAreaProvider.h"
 #include "Navigation/PathFollowingComponent.h"
+
+namespace
+{
+	float ResolveAcceptanceRadius(const AActor& TargetActor, float DefaultRadius)
+	{
+		if (const IIFAttackAreaProvider* const Provider = Cast<IIFAttackAreaProvider>(&TargetActor))
+		{
+			return Provider->GetAttackAreaAcceptanceRadius();
+		}
+
+		return DefaultRadius;
+	}
+}
 
 UBTTask_IFMoveToTarget::UBTTask_IFMoveToTarget()
 {
@@ -12,7 +25,6 @@ UBTTask_IFMoveToTarget::UBTTask_IFMoveToTarget()
 	bNotifyTick = true;
 
 	TargetActorKey.AddObjectFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_IFMoveToTarget, TargetActorKey), AActor::StaticClass());
-	MoveDestinationKey.AddVectorFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_IFMoveToTarget, MoveDestinationKey));
 }
 
 EBTNodeResult::Type UBTTask_IFMoveToTarget::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
@@ -26,7 +38,6 @@ EBTNodeResult::Type UBTTask_IFMoveToTarget::ExecuteTask(UBehaviorTreeComponent& 
 
 	if (TargetActorKey.SelectedKeyName.IsNone())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-AI] MoveToTarget: TargetActorKey is unset on this node."));
 		return EBTNodeResult::Failed;
 	}
 
@@ -36,30 +47,10 @@ EBTNodeResult::Type UBTTask_IFMoveToTarget::ExecuteTask(UBehaviorTreeComponent& 
 		return EBTNodeResult::Failed;
 	}
 
-	EPathFollowingRequestResult::Type RequestResult;
+	const float Radius = ResolveAcceptanceRadius(*TargetActor, AcceptanceRadius);
 
-	if (TargetActor->IsA<AIFStronghold>())
-	{
-		FName KeyName = MoveDestinationKey.SelectedKeyName;
-		if (KeyName.IsNone())
-		{
-			KeyName = TEXT("MoveDestination");
-		}
-
-		const FVector Destination = Blackboard->GetValueAsVector(KeyName);
-
-		FAIMoveRequest MoveReq;
-		MoveReq.SetGoalLocation(Destination);
-		MoveReq.SetAcceptanceRadius(AcceptanceRadius);
-		MoveReq.SetProjectGoalLocation(true);
-		MoveReq.SetUsePathfinding(true);
-		MoveReq.SetAllowPartialPath(true);
-		RequestResult = AIController->MoveTo(MoveReq);
-	}
-	else
-	{
-		RequestResult = AIController->MoveToActor(TargetActor, AcceptanceRadius);
-	}
+	// The resolved radius already includes target-specific geometry; engine overlap expansion would double count it.
+	const EPathFollowingRequestResult::Type RequestResult = AIController->MoveToActor(TargetActor, Radius, false);
 
 	switch (RequestResult)
 	{

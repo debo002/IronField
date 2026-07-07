@@ -7,9 +7,6 @@ UIFHealthComponent::UIFHealthComponent()
     PrimaryComponentTick.bCanEverTick = false;
 }
 
-// ============================================================================
-// Actions
-// ============================================================================
 
 void UIFHealthComponent::ApplyDamage(float Amount)
 {
@@ -44,18 +41,12 @@ void UIFHealthComponent::Revive()
     OnHealthChanged.Broadcast(GetHealthPercent());
 }
 
-// ============================================================================
-// Queries
-// ============================================================================
 
 float UIFHealthComponent::GetHealthPercent() const
 {
     return CurrentHealth / MaxHealth;
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 void UIFHealthComponent::BeginPlay()
 {
@@ -83,9 +74,6 @@ void UIFHealthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
     }
 }
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
 
 void UIFHealthComponent::HandleOwnerTakeAnyDamage(AActor* , float Damage, const UDamageType* , AController* , AActor* )
 {

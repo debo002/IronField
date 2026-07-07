@@ -5,11 +5,6 @@
 #include "Components/ActorComponent.h"
 #include "IFHealthComponent.generated.h"
 
-/**
- * Manages health, damage application, and death state for an actor.
- * Listens to the owner's OnTakeAnyDamage so any damage source (melee, environment, etc.)
- * funnels through ApplyDamage automatically.
- */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFHealthComponent : public UActorComponent
 {
@@ -52,7 +47,6 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
     float MaxHealth = 100.f;
 
-    // Health value to which the character is restored upon revival.
     UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
     float ReviveHealth = 30.f;
 

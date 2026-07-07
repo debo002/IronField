@@ -4,19 +4,14 @@
 #include "GameFramework/Character.h"
 #include "IFBaseCharacter.generated.h"
 
-class UAnimMontage;
 class UBoxComponent;
+class UAnimInstance;
 class UIFCombatComponent;
 class UIFHealthComponent;
 class UIFStaminaComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterDied, AIFBaseCharacter*, Character);
 
-/**
- * Base class for all characters (player and enemies). Handles the shared stuff: health, stamina,
- * combat, the weapon hitbox, and death (play death montage, stop, done). Does not know about
- * reviving - that's player-only behavior, added on top in AIFPlayerCharacter.
- */
 UCLASS()
 class IRONFIELD_API AIFBaseCharacter : public ACharacter
 {
@@ -54,22 +49,16 @@ public:
 	virtual void Landed(const FHitResult& Hit) override;
 
 protected:
-	// Blend-out time for whatever montage was playing when death happens.
 	UPROPERTY(EditDefaultsOnly, Category = "Characters|Animation")
 	float DeathMontageBlendOutTime = 0.15f;
 
-	// Size of the weapon hitbox, attached to the mesh's weapon socket.
 	UPROPERTY(EditDefaultsOnly, Category = "Characters|Combat")
 	FVector WeaponCollisionExtent = FVector(20.f, 60.f, 20.f);
 
-	// Called when death starts, before the death montage plays.
 	virtual void OnDeathStarted() {}
 
-	// Called when the death montage finishes. Base does nothing here - override this to react
-	// to death being "complete" (for example the player starts its revive timer from here).
 	virtual void OnDeathMontageFinished() {}
 
-	// Called when stamina hits 0.
 	virtual void OnStaminaDepleted() {}
 
 	UAnimInstance* GetMeshAnimInstance() const;
@@ -96,7 +85,6 @@ private:
 	void BindGameplayDelegates();
 	void UnbindGameplayDelegates();
 
-	// Death helpers - split out of HandleDeath so each step reads on its own.
 	void StopMovementForDeath();
 	void DisableCollisionForDeath();
 };

@@ -3,8 +3,6 @@
 #include "AIController.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "Building/IFStronghold.h"
-#include "Building/IFStrongholdAttackPoint.h"
 #include "Character/IFBaseCharacter.h"
 #include "Kismet/GameplayStatics.h"
 #include "Wave/IFWaveManager.h"
@@ -15,7 +13,6 @@ namespace
 	{
 		TWeakObjectPtr<AIFWaveManager> WaveManager;
 		bool bHoldingPlayerSlot = false;
-		TWeakObjectPtr<AIFStrongholdAttackPoint> ReservedAttackPoint;
 	};
 
 	AIFWaveManager* ResolveWaveManager(UBehaviorTreeComponent& OwnerComp)
@@ -33,7 +30,6 @@ UBTService_IFFindTarget::UBTService_IFFindTarget()
 	RandomDeviation = 0.1f;
 
 	TargetActorKey.AddObjectFilter(this, GET_MEMBER_NAME_CHECKED(UBTService_IFFindTarget, TargetActorKey), AActor::StaticClass());
-	MoveDestinationKey.AddVectorFilter(this, GET_MEMBER_NAME_CHECKED(UBTService_IFFindTarget, MoveDestinationKey));
 }
 
 uint16 UBTService_IFFindTarget::GetInstanceMemorySize() const
@@ -57,22 +53,19 @@ void UBTService_IFFindTarget::OnBecomeRelevant(UBehaviorTreeComponent& OwnerComp
 	UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
 	AActor* const ExistingTarget = Blackboard ? Cast<AActor>(Blackboard->GetValueAsObject(TargetActorKey.SelectedKeyName)) : nullptr;
 
-	if (ExistingTarget)
+	if (ExistingTarget && ExistingTarget == WaveManager->GetPlayerActor())
 	{
-		if (ExistingTarget == WaveManager->GetPlayerActor())
+		AIFBaseCharacter* const PlayerChar = Cast<AIFBaseCharacter>(ExistingTarget);
+		if (PlayerChar && !PlayerChar->IsDead() && WaveManager->TryReserveEngagementSlot())
 		{
-			AIFBaseCharacter* const PlayerChar = Cast<AIFBaseCharacter>(ExistingTarget);
-			if (PlayerChar && !PlayerChar->IsDead() && WaveManager->TryReserveEngagementSlot())
-			{
-				Memory->bHoldingPlayerSlot = true;
-				return;
-			}
-		}
-		else if (ExistingTarget == WaveManager->GetStrongholdActor())
-		{
-			ReserveStrongholdAttackPoint(OwnerComp, NodeMemory, *ExistingTarget);
+			Memory->bHoldingPlayerSlot = true;
 			return;
 		}
+	}
+
+	if (ExistingTarget && ExistingTarget == WaveManager->GetStrongholdActor())
+	{
+		return;
 	}
 
 	PickInitialTarget(OwnerComp, NodeMemory, *WaveManager);
@@ -89,8 +82,6 @@ void UBTService_IFFindTarget::OnCeaseRelevant(UBehaviorTreeComponent& OwnerComp,
 			WaveManager->ReleaseEngagementSlot();
 		}
 	}
-
-	ReleaseHeldAttackPoint(NodeMemory);
 
 	if (Memory)
 	{
@@ -123,7 +114,6 @@ void UBTService_IFFindTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
 
 	AActor* const CurrentTarget = Cast<AActor>(Blackboard->GetValueAsObject(TargetActorKey.SelectedKeyName));
 
-	// Player died mid-target: release the slot and fall back to the Stronghold.
 	if (CurrentTarget && CurrentTarget == WaveManager->GetPlayerActor())
 	{
 		AIFBaseCharacter* const PlayerChar = Cast<AIFBaseCharacter>(CurrentTarget);
@@ -134,17 +124,11 @@ void UBTService_IFFindTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
 				WaveManager->ReleaseEngagementSlot();
 				Memory->bHoldingPlayerSlot = false;
 			}
-			AActor* const StrongholdActor = WaveManager->GetStrongholdActor();
-			SetBlackboardTarget(OwnerComp, StrongholdActor);
-			if (StrongholdActor)
-			{
-				ReserveStrongholdAttackPoint(OwnerComp, NodeMemory, *StrongholdActor);
-			}
+			SetBlackboardTarget(OwnerComp, WaveManager->GetStrongholdActor());
 			return;
 		}
 	}
 
-	// No target set (e.g. cleared by the controller on player death) - pick one cleanly.
 	if (!CurrentTarget)
 	{
 		PickInitialTarget(OwnerComp, NodeMemory, *WaveManager);
@@ -154,16 +138,6 @@ void UBTService_IFFindTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
 	if (CurrentTarget == WaveManager->GetStrongholdActor())
 	{
 		ReEvaluateStrongholdTarget(OwnerComp, NodeMemory, *WaveManager);
-
-		// Still on the Stronghold: claim an attack point if we don't hold one yet (e.g. all
-		// points were occupied when this enemy first spawned).
-		if (Blackboard->GetValueAsObject(TargetActorKey.SelectedKeyName) == WaveManager->GetStrongholdActor())
-		{
-			if (!Memory->ReservedAttackPoint.IsValid())
-			{
-				ReserveStrongholdAttackPoint(OwnerComp, NodeMemory, *CurrentTarget);
-			}
-		}
 	}
 }
 
@@ -197,16 +171,7 @@ void UBTService_IFFindTarget::PickInitialTarget(UBehaviorTreeComponent& OwnerCom
 	}
 
 	Memory->bHoldingPlayerSlot = bReservedSlot;
-
-	if (NewTarget)
-	{
-		SetBlackboardTarget(OwnerComp, NewTarget);
-
-		if (!bReservedSlot)
-		{
-			ReserveStrongholdAttackPoint(OwnerComp, NodeMemory, *NewTarget);
-		}
-	}
+	SetBlackboardTarget(OwnerComp, NewTarget);
 }
 
 void UBTService_IFFindTarget::ReEvaluateStrongholdTarget(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, AIFWaveManager& WaveManager) const
@@ -238,7 +203,6 @@ void UBTService_IFFindTarget::ReEvaluateStrongholdTarget(UBehaviorTreeComponent&
 			if (DistToPlayer <= 1500.f && WaveManager.TryReserveEngagementSlot())
 			{
 				Memory->bHoldingPlayerSlot = true;
-				ReleaseHeldAttackPoint(NodeMemory);
 				SetBlackboardTarget(OwnerComp, PlayerActor);
 				return;
 			}
@@ -255,7 +219,6 @@ void UBTService_IFFindTarget::ReEvaluateStrongholdTarget(UBehaviorTreeComponent&
 			if (DistToPlayer <= 1500.f && WaveManager.TryReserveEngagementSlot())
 			{
 				Memory->bHoldingPlayerSlot = true;
-				ReleaseHeldAttackPoint(NodeMemory);
 				SetBlackboardTarget(OwnerComp, PlayerActor);
 				return;
 			}
@@ -270,41 +233,4 @@ void UBTService_IFFindTarget::SetBlackboardTarget(UBehaviorTreeComponent& OwnerC
 	{
 		Blackboard->SetValueAsObject(TargetActorKey.SelectedKeyName, NewTarget);
 	}
-}
-
-void UBTService_IFFindTarget::ReserveStrongholdAttackPoint(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, AActor& StrongholdActor) const
-{
-	FIFFindTargetMemory* const Memory = reinterpret_cast<FIFFindTargetMemory*>(NodeMemory);
-	UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
-	const AAIController* const AIController = OwnerComp.GetAIOwner();
-	const APawn* const ControlledPawn = AIController ? AIController->GetPawn() : nullptr;
-
-	if (!Memory || !Blackboard || !ControlledPawn) return;
-
-	AIFStronghold* const Stronghold = Cast<AIFStronghold>(&StrongholdActor);
-	if (!Stronghold)
-	{
-		Blackboard->SetValueAsVector(MoveDestinationKey.SelectedKeyName, StrongholdActor.GetActorLocation());
-		return;
-	}
-
-	ReleaseHeldAttackPoint(NodeMemory);
-
-	AIFStrongholdAttackPoint* const Point = Stronghold->ReserveNearestFreeAttackPoint(ControlledPawn->GetActorLocation());
-	Memory->ReservedAttackPoint = Point;
-
-	const FVector Destination = Point ? Point->GetActorLocation() : StrongholdActor.GetActorLocation();
-	Blackboard->SetValueAsVector(MoveDestinationKey.SelectedKeyName, Destination);
-}
-
-void UBTService_IFFindTarget::ReleaseHeldAttackPoint(uint8* NodeMemory) const
-{
-	FIFFindTargetMemory* const Memory = reinterpret_cast<FIFFindTargetMemory*>(NodeMemory);
-	if (!Memory) return;
-
-	if (AIFStrongholdAttackPoint* const Point = Memory->ReservedAttackPoint.Get())
-	{
-		Point->SetOccupied(false);
-	}
-	Memory->ReservedAttackPoint = nullptr;
 }

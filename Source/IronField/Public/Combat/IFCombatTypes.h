@@ -6,7 +6,6 @@
 class UAnimMontage;
 class UDamageType;
 
-// Current combat state. Blocks actions that don't make sense together (e.g. can't attack while dead).
 UENUM(BlueprintType)
 enum class ECombatState : uint8
 {
@@ -16,7 +15,6 @@ enum class ECombatState : uint8
 	Dead
 };
 
-// One step in an attack combo: its animation, cost, damage, and chance to chain into the next step.
 USTRUCT(BlueprintType)
 struct FIFComboStep
 {
@@ -34,8 +32,6 @@ struct FIFComboStep
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|ComboStep")
 	TSubclassOf<UDamageType> DamageTypeClass;
 
-	// Chance the AI queues this step's follow-up when this step lands (or completes, for AI purposes).
-	// Only used by AI-driven combat; ignored for player input, which chains on button presses instead.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|ComboStep", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float AIContinueChance = 0.f;
 };

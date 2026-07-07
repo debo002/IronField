@@ -5,11 +5,6 @@
 #include "Components/ActorComponent.h"
 #include "IFStaminaComponent.generated.h"
 
-/**
- * Manages stamina: one-shot consumption (attacks, blocks), continuous drain (sprint, spin,
- * holding block), and regeneration after a delay. Tick is only enabled while stamina is
- * actively draining or regenerating - it's off the rest of the time.
- */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFStaminaComponent : public UActorComponent
 {
@@ -46,22 +41,18 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float MaxStamina = 100.f;
 
-    // Amount of stamina recovered per second after the delay has passed.
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float StaminaRegenRate = 20.f;
 
-    // Time in seconds to wait after stamina consumption before regeneration begins.
     UPROPERTY(EditDefaultsOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float StaminaRegenDelay = 3.5f;
 
     UPROPERTY(VisibleInstanceOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float CurrentStamina = 0.f;
 
-    // Timer tracking elapsed time since last drain to determine when to start regeneration.
     UPROPERTY(VisibleInstanceOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float TimeSinceLastStaminaDrain = 0.f;
 
-    // Rate of stamina loss per second when continuous draining is active (e.g., sprinting).
     UPROPERTY(VisibleInstanceOnly, Category = "Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
     float ContinuousDrainRate = 0.f;
 

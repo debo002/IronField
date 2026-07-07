@@ -2,71 +2,58 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Core/IFAttackAreaProvider.h"
 #include "IFStronghold.generated.h"
 
-class UStaticMeshComponent;
-class USceneComponent;
-class UBoxComponent;
 class UIFHealthComponent;
+class UStaticMeshComponent;
+class USphereComponent;
 class USoundBase;
 class UNiagaraSystem;
-class AIFStrongholdAttackPoint;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStrongholdDestroyed, AIFStronghold*, Stronghold);
 
-/**
- * Represents a stronghold building that can be captured or defended.
- */
 UCLASS()
-class IRONFIELD_API AIFStronghold : public AActor
+class IRONFIELD_API AIFStronghold : public AActor, public IIFAttackAreaProvider
 {
 	GENERATED_BODY()
 
 public:
 	AIFStronghold();
 
-	UFUNCTION(BlueprintPure, Category = "Stronghold|Components")
-	UIFHealthComponent* GetHealthComponent() const { return HealthComponent; }
-
-	UPROPERTY(BlueprintAssignable, Category = "Stronghold")
+	UPROPERTY(BlueprintAssignable, Category = "IronField|Stronghold")
 	FOnStrongholdDestroyed OnStrongholdDestroyed;
 
-	// Called by enemy AI to claim the closest unoccupied attack point. Returns nullptr if
-	// none are free or none are configured.
-	UFUNCTION(BlueprintCallable, Category = "Stronghold|AttackPoints")
-	AIFStrongholdAttackPoint* ReserveNearestFreeAttackPoint(const FVector& FromLocation);
-
-	// Called when an enemy stops targeting the Stronghold (retargeted, died, etc).
-	UFUNCTION(BlueprintCallable, Category = "Stronghold|AttackPoints")
-	void ReleaseAttackPoint(AIFStrongholdAttackPoint* Point);
+	virtual float GetAttackAreaRange() const override;
+	virtual float GetAttackAreaAcceptanceRadius() const override;
 
 protected:
 	virtual void BeginPlay() override;
-
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stronghold|Components")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Stronghold")
 	TObjectPtr<UStaticMeshComponent> MeshComponent;
 
-	// Dedicated hit volume weapon swings overlap against. The visual mesh may be large,
-	// composite, or have collision that doesn't reach every attack point, so combat hit
-	// detection is decoupled from it - resize/reposition this in the editor to cover
-	// wherever enemies are actually meant to land hits from.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stronghold|Components")
-	TObjectPtr<UBoxComponent> HitboxComponent;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Stronghold")
+	TObjectPtr<USphereComponent> HitboxComponent;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stronghold|Components")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold")
+	float AttackRangeMargin = 150.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Targeting")
+	float AttackAreaRangeMargin = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Targeting")
+	float MoveAcceptanceRadiusMargin = -70.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Stronghold")
 	TObjectPtr<UIFHealthComponent> HealthComponent;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Stronghold|Feedback")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Feedback")
 	TObjectPtr<USoundBase> HitSound;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Stronghold|Feedback")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Feedback")
 	TObjectPtr<UNiagaraSystem> HitVFX;
-
-	// Designer-placed points around the Stronghold enemies path to and attack from.
-	UPROPERTY(EditInstanceOnly, Category = "Stronghold|AttackPoints")
-	TArray<TObjectPtr<AIFStrongholdAttackPoint>> AttackPoints;
 
 private:
 	UFUNCTION()

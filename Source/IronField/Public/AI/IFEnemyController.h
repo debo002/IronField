@@ -29,8 +29,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Behavior")
 	TObjectPtr<UBehaviorTree> BehaviorTreeAsset;
 
-	// After a full attack sequence finishes, the enemy pauses this long before attacking again.
-	// Gives the player a clear punish window.
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
 	float MinReattackCooldownSeconds = 1.8f;
 
@@ -40,7 +38,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
 	float BlockReactionChance = 0.3f;
 
-	// How long the enemy holds guard after raising it.
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
 	float MinBlockHoldSeconds = 0.8f;
 
@@ -50,7 +47,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Movement")
 	float ChaseSpeed = 300.f;
 
-	// Enemies slow down significantly during an attack swing, forcing commitment to the swing.
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Movement")
 	float AttackingSpeed = 120.f;
 
@@ -84,9 +80,7 @@ private:
 
 	EBlackboardNotificationResult HandleTargetBlackboardChanged(const UBlackboardComponent& TargetBlackboard, FBlackboard::FKey KeyID);
 
-	// Runs one tick after OnPossess, since OnPossess fires before BeginPlay has run on any
-	// actor - including the WaveManager. Deferring guarantees the WaveManager has already
-	// cached its Player/Stronghold references by the time "Find Target" first runs.
+	// OnPossess can run before BeginPlay on world actors the behavior tree depends on.
 	void InitializeAfterPossession();
 
 	void BindOwnDelegates();

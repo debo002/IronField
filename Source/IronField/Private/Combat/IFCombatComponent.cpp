@@ -1,25 +1,22 @@
 #include "Combat/IFCombatComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "AIController.h"
 #include "Character/IFBaseCharacter.h"
 #include "Components/BoxComponent.h"
-#include "Core/IFAnimMontageUtils.h"
-#include "Stats/IFHealthComponent.h"
-#include "Stats/IFStaminaComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Core/IFLog.h"
+#include "Core/IFAnimMontageUtils.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/Pawn.h"
-#include "AIController.h"
+#include "Stats/IFHealthComponent.h"
+#include "Stats/IFStaminaComponent.h"
 
 UIFCombatComponent::UIFCombatComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
-
-// ============================================================================
-// Actions
-// ============================================================================
 
 void UIFCombatComponent::StartAttack()
 {
@@ -68,13 +65,11 @@ void UIFCombatComponent::StopBlock()
 		return;
 	}
 
-	// Set state to Idle first so any montage end delegate triggered by Montage_Stop
-	// does not see IsBlocking()==true and accidentally restart the block loop.
+	// Montage_Stop can synchronously fire its end delegate, so state must change first.
 	SetCombatState(ECombatState::Idle);
 
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 
-	// Stop whichever block-family montage is actually playing.
 	if (AnimInstance && ActiveBlockMontage)
 	{
 		AnimInstance->Montage_Stop(BlockBlendOutTime, ActiveBlockMontage);
@@ -159,16 +154,13 @@ void UIFCombatComponent::ReceiveMeleeAttack(AActor* Instigator, float Damage, TS
 
 	const bool bFacing = IsOwnerFacingTarget(Instigator);
 
-	// Active block: character is explicitly in the Blocking state and facing the attacker.
 	if (IsBlocking() && bFacing)
 	{
 		PlayBlockReactionMontage();
 		return;
 	}
 
-	// Reactive block chance: AI characters can roll to block even when not in the Blocking state.
-	// Set EnemyBlockChance > 0 on the enemy's combat component; leave at 0 for the player.
-	if (EnemyBlockChance > 0.f && bFacing && FMath::FRand() < EnemyBlockChance)
+	if (ShouldReactivelyBlock(bFacing))
 	{
 		PlayBlockReactionMontage();
 		return;
@@ -182,7 +174,6 @@ void UIFCombatComponent::ReceiveMeleeAttack(AActor* Instigator, float Damage, TS
 
 	ApplyDamageTo(Owner, Instigator, Damage, DamageTypeClass);
 
-	// Damage may have killed this character — don't play a hit reaction over the death montage.
 	if (IsDead())
 	{
 		return;
@@ -191,9 +182,6 @@ void UIFCombatComponent::ReceiveMeleeAttack(AActor* Instigator, float Damage, TS
 	PlayHitReactionMontage();
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 void UIFCombatComponent::BeginPlay()
 {
@@ -215,8 +203,7 @@ void UIFCombatComponent::BeginPlay()
 	}
 	else
 	{
-		// Without this, attacks will play animations but never register a hit on anyone.
-		UE_LOG(LogTemp, Warning, TEXT("[IF-Combat] %s has no WeaponCollisionBox — attacks will never register hits."),
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has no WeaponCollisionBox - attacks will never register hits."),
 			*GetNameSafe(Owner));
 	}
 }
@@ -241,9 +228,6 @@ void UIFCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 }
 
-// ============================================================================
-// Queries
-// ============================================================================
 
 float UIFCombatComponent::GetComboContinueChance(int32 ComboIndex) const
 {
@@ -265,9 +249,6 @@ bool UIFCombatComponent::HasUsableStamina(float Amount) const
 	return StaminaComponent && StaminaComponent->HasStamina(Amount);
 }
 
-// ============================================================================
-// Internal helpers - state
-// ============================================================================
 
 void UIFCombatComponent::SetCombatState(ECombatState NewState)
 {
@@ -294,9 +275,6 @@ void UIFCombatComponent::ResetRegisteredAttackHits()
 	RegisteredAttackHits.Reset();
 }
 
-// ============================================================================
-// Internal helpers - attack montages
-// ============================================================================
 
 bool UIFCombatComponent::CanPlayAttackMontage(int32 ComboIndex) const
 {
@@ -320,8 +298,6 @@ bool UIFCombatComponent::TryPlayAttackMontage(int32 ComboIndex)
 		return false;
 	}
 
-	// CanPlayAttackMontage already confirmed StaminaComponent is valid via HasUsableStamina,
-	// but that dependency isn't obvious from this function alone — guard explicitly.
 	if (!StaminaComponent)
 	{
 		return false;
@@ -395,17 +371,13 @@ float UIFCombatComponent::GetComboStaminaCost(int32 ComboIndex) const
 	return ComboSteps.IsValidIndex(ComboIndex) ? ComboSteps[ComboIndex].StaminaCost : 0.f;
 }
 
-// ============================================================================
-// Internal helpers - block
-// ============================================================================
 
 bool UIFCombatComponent::TryPlayBlockMontage()
 {
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	if (!AnimInstance || !BlockMontage)
 	{
-		// No block pose configured — treat as trivially successful so the state machine still
-		// enters Blocking (useful while blocking anims aren't authored yet).
+		// Missing block animation should not disable the gameplay block.
 		ActiveBlockMontage = nullptr;
 		return true;
 	}
@@ -442,9 +414,6 @@ bool UIFCombatComponent::IsOwnerFacingTarget(AActor* TargetActor) const
 	return Dot >= BlockFacingDotThreshold;
 }
 
-// ============================================================================
-// Internal helpers - reaction montages
-// ============================================================================
 
 void UIFCombatComponent::PlayHitReactionMontage()
 {
@@ -472,7 +441,6 @@ void UIFCombatComponent::PlayBlockReactionMontage()
 		return;
 	}
 
-	// Stop the idle block loop first so the reaction owns the slot cleanly.
 	if (BlockMontage && AnimInstance->Montage_IsPlaying(BlockMontage))
 	{
 		AnimInstance->Montage_Stop(FMath::Max(0.01f, BlockBlendOutTime), BlockMontage);
@@ -483,7 +451,6 @@ void UIFCombatComponent::PlayBlockReactionMontage()
 	const float PlayLength = AnimInstance->Montage_Play(BlockReactionMontage);
 	if (PlayLength > 0.f)
 	{
-		// Reaction now owns the block slot until it ends or StopBlock interrupts it.
 		ActiveBlockMontage = BlockReactionMontage;
 
 		FOnMontageEnded EndDelegate;
@@ -492,7 +459,7 @@ void UIFCombatComponent::PlayBlockReactionMontage()
 	}
 }
 
-void UIFCombatComponent::HandleHitReactionMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+void UIFCombatComponent::HandleHitReactionMontageEnded(UAnimMontage* Montage, bool)
 {
 	if (Montage != HitReactionMontage)
 	{
@@ -501,14 +468,13 @@ void UIFCombatComponent::HandleHitReactionMontageEnded(UAnimMontage* Montage, bo
 
 	ClearMontageEndDelegate(GetAnimInstance(), HitReactionMontage);
 
-	// If block was pressed while the hit reaction was playing, restore the block pose now.
 	if (IsBlocking())
 	{
 		TryPlayBlockMontage();
 	}
 }
 
-void UIFCombatComponent::HandleBlockReactionMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+void UIFCombatComponent::HandleBlockReactionMontageEnded(UAnimMontage* Montage, bool)
 {
 	if (Montage != BlockReactionMontage)
 	{
@@ -518,9 +484,6 @@ void UIFCombatComponent::HandleBlockReactionMontageEnded(UAnimMontage* Montage, 
 	ClearMontageEndDelegate(GetAnimInstance(), BlockReactionMontage);
 	ActiveBlockMontage = nullptr;
 
-	// After a block reaction the guard is always broken — return to Idle.
-	// The player must release and re-press Block to block again.
-	// (If StopBlock was already called while the reaction played, this is a safe no-op.)
 	if (IsBlocking())
 	{
 		StopBlock();
@@ -534,9 +497,6 @@ void UIFCombatComponent::ClearReactionMontageDelegates()
 	ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
 }
 
-// ============================================================================
-// Internal helpers - hit resolution
-// ============================================================================
 
 void UIFCombatComponent::HandleWeaponBoxBeginOverlap(UPrimitiveComponent*, AActor* OtherActor, UPrimitiveComponent*, int32, bool, const FHitResult&)
 {
@@ -589,7 +549,6 @@ UIFHealthComponent* UIFCombatComponent::GetValidAttackTargetHealth(AActor* Targe
 		return nullptr;
 	}
 
-	// No friendly fire: skip the hit if both sides are AI-controlled.
 	const APawn* const OwnerPawn = Cast<APawn>(Owner);
 	const APawn* const TargetPawn = Cast<APawn>(TargetActor);
 	if (OwnerPawn && TargetPawn)

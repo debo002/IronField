@@ -4,6 +4,7 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
 #include "Combat/IFCombatComponent.h"
+#include "Core/IFLog.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Wave/IFWaveManager.h"
@@ -61,7 +62,7 @@ void AIFEnemyController::InitializeAfterPossession()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-AI] %s: BehaviorTreeAsset is not set on this controller."), *GetName());
+		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: BehaviorTreeAsset is not set on this controller."), *GetName());
 	}
 
 	CachedWaveManager = Cast<AIFWaveManager>(UGameplayStatics::GetActorOfClass(this, AIFWaveManager::StaticClass()));
@@ -71,7 +72,7 @@ void AIFEnemyController::InitializeAfterPossession()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-AI] %s: no AIFWaveManager found in the level."), *GetName());
+		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: no AIFWaveManager found in the level."), *GetName());
 	}
 
 	if (UBlackboardComponent* const BB = GetBlackboardComponent())
@@ -79,7 +80,7 @@ void AIFEnemyController::InitializeAfterPossession()
 		const FBlackboard::FKey TargetKeyID = BB->GetKeyID(TargetActorKeyName);
 		if (TargetKeyID == FBlackboard::InvalidKey)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[IF-AI] %s: Blackboard has no key named 'TargetActor'."), *GetName());
+			UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: Blackboard has no key named 'TargetActor'."), *GetName());
 		}
 		TargetObserverHandle = BB->RegisterObserver(TargetKeyID, this,
 			FOnBlackboardChangeNotification::CreateUObject(this, &AIFEnemyController::HandleTargetBlackboardChanged));
@@ -88,7 +89,7 @@ void AIFEnemyController::InitializeAfterPossession()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-AI] %s: no BlackboardComponent after RunBehaviorTree."), *GetName());
+		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: no BlackboardComponent after RunBehaviorTree."), *GetName());
 	}
 
 	BindOwnDelegates();
@@ -279,8 +280,7 @@ void AIFEnemyController::HandlePlayerDied()
 
 	CachedWaveManager->ReleaseEngagementSlot();
 
-	// Clear to nullptr - aborts active tasks instantly. FindTarget picks up the null target
-	// on its next tick and re-evaluates cleanly via PickInitialTarget.
+	// Clearing the key aborts active BT tasks before FindTarget re-evaluates on its next tick.
 	BB->SetValueAsObject(TargetActorKeyName, nullptr);
 }
 

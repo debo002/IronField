@@ -4,9 +4,6 @@
 #include "BehaviorTree/BTTaskNode.h"
 #include "BTTask_IFAttack.generated.h"
 
-/**
- * Behavior Tree task for handling latent AI combat swings.
- */
 UCLASS()
 class IRONFIELD_API UBTTask_IFAttack : public UBTTaskNode
 {

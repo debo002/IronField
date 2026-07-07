@@ -6,9 +6,6 @@
 
 class UUserWidget;
 
-/**
- * Manages player-specific input and HUD interactions.
- */
 UCLASS()
 class IRONFIELD_API AIFPlayerController : public APlayerController
 {

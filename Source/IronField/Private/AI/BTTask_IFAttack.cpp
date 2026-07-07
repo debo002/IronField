@@ -41,13 +41,9 @@ EBTNodeResult::Type UBTTask_IFAttack::ExecuteTask(UBehaviorTreeComponent& OwnerC
 		return EBTNodeResult::Failed;
 	}
 
-	// Face the target before swinging.
 	const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(ControlledPawn->GetActorLocation(), TargetActor->GetActorLocation());
 	ControlledPawn->SetActorRotation(FRotator(0.f, LookAtRotation.Yaw, 0.f));
 
-	// Damage (Stronghold included) is applied per-swing through the weapon collision
-	// overlap pipeline (see UIFCombatComponent::ResolveAttackHit), not from here - this
-	// task only needs to trigger the swing itself.
 	Combat->StartAttack();
 
 	return EBTNodeResult::InProgress;
@@ -66,7 +62,6 @@ void UBTTask_IFAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMe
 
 	const UIFCombatComponent* const Combat = EnemyController->GetControlledCombatComponent();
 
-	// The task completes once the montage finishes and combat drops back to Idle.
 	if (!Combat || !Combat->IsAttacking())
 	{
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);

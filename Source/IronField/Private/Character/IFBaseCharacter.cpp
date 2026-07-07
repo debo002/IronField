@@ -1,10 +1,9 @@
 #include "Character/IFBaseCharacter.h"
 
-#include "Animation/AnimInstance.h"
 #include "Components/BoxComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Combat/IFCombatComponent.h"
-#include "Core/IFAnimMontageUtils.h"
+#include "Core/IFLog.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -39,9 +38,6 @@ AIFBaseCharacter::AIFBaseCharacter(const FObjectInitializer& ObjectInitializer)
 	}
 }
 
-// ============================================================================
-// Queries
-// ============================================================================
 
 bool AIFBaseCharacter::IsDead() const
 {
@@ -58,9 +54,6 @@ bool AIFBaseCharacter::IsAttacking() const
 	return CombatComponent && CombatComponent->IsAttacking();
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 void AIFBaseCharacter::BeginPlay()
 {
@@ -84,14 +77,12 @@ void AIFBaseCharacter::Landed(const FHitResult& Hit)
 	{
 		if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 		{
+			// Falling corpses keep physics until they land, then become fully inert.
 			Movement->DisableMovement();
 		}
 	}
 }
 
-// ============================================================================
-// Internal helpers - delegate binding
-// ============================================================================
 
 void AIFBaseCharacter::BindGameplayDelegates()
 {
@@ -130,9 +121,6 @@ void AIFBaseCharacter::HandleStaminaDepleted()
 	OnStaminaDepleted();
 }
 
-// ============================================================================
-// Internal helpers - death
-// ============================================================================
 
 void AIFBaseCharacter::HandleDeath()
 {
@@ -141,7 +129,7 @@ void AIFBaseCharacter::HandleDeath()
 		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("[IF-Death] %s died."), *GetName());
+	UE_LOG(LogIronField, Log, TEXT("[IF-Death] %s died."), *GetName());
 
 	CombatComponent->HandleOwnerDeath();
 
@@ -156,7 +144,7 @@ void AIFBaseCharacter::HandleDeath()
 	OnDeathStarted();
 	OnCharacterDied.Broadcast(this);
 
-	// Death is visual-only in AnimBP from here, so gameplay considers it complete immediately.
+	// Death completion is visual-only after this point; AnimBP owns the pose.
 	OnDeathMontageFinished();
 }
 
@@ -175,12 +163,10 @@ void AIFBaseCharacter::StopMovementForDeath()
 	{
 		Movement->DisableMovement();
 	}
-	// If falling, Landed() will disable movement once the corpse hits the ground.
 }
 
 void AIFBaseCharacter::DisableCollisionForDeath()
 {
-	// Disable capsule and mesh collision so the corpse doesn't block other pawns or the NavMesh.
 	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);

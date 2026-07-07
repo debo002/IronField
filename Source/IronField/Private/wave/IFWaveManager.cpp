@@ -5,6 +5,7 @@
 #include "Character/IFBaseCharacter.h"
 #include "Wave/IFEnemySpawnPoint.h"
 #include "Combat/IFCombatComponent.h"
+#include "Core/IFLog.h"
 #include "Kismet/GameplayStatics.h"
 #include "Stats/IFHealthComponent.h"
 #include "Core/IFStrongholdSubsystem.h"
@@ -52,7 +53,7 @@ void AIFWaveManager::StartNextWave()
 {
 	if (bIsWaveActive)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-Wave] Cannot start next wave while wave is already active."));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Cannot start next wave while wave is already active."));
 		return;
 	}
 
@@ -62,7 +63,7 @@ void AIFWaveManager::StartNextWave()
 	if (CurrentWaveIndex >= Waves.Num())
 	{
 		bIsWaveActive = false;
-		UE_LOG(LogTemp, Log, TEXT("[IF-Wave] All waves completed."));
+		UE_LOG(LogIronField, Log, TEXT("[IF-Wave] All waves completed."));
 		OnAllWavesCompleted.Broadcast();
 		return;
 	}
@@ -73,7 +74,7 @@ void AIFWaveManager::StartNextWave()
 	SpawnedEnemies.Empty();
 	bIsWaveActive = true;
 
-	UE_LOG(LogTemp, Log, TEXT("[IF-Wave] Starting wave %d."), CurrentWave);
+	UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Starting wave %d."), CurrentWave);
 	OnWaveStarted.Broadcast(CurrentWave);
 
 	const FWaveDefinition& Wave = Waves[CurrentWaveIndex];
@@ -93,7 +94,7 @@ void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
 
 	if (SpawnPointActors.Num() <= 0)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-Wave] No AIFEnemySpawnPoint actors found in the level; spawning at manager location."));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] No AIFEnemySpawnPoint actors found in the level; spawning at manager location."));
 	}
 
 	TotalEnemiesInWave = 0;
@@ -109,9 +110,8 @@ void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
 	{
 		if (!Group.EnemyClass)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[IF-Wave] Wave %d has an enemy group with no Enemy Class assigned - skipping."), CurrentWave);
-			// These enemies will never exist, so they must not count toward the wave total,
-			// or completion could never trigger.
+			UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Wave %d has an enemy group with no Enemy Class assigned - skipping."), CurrentWave);
+			// Skipped definitions must be removed from the completion target.
 			TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - Group.EnemyCount);
 			continue;
 		}
@@ -131,7 +131,6 @@ void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
 				}
 			}
 
-			// Slight random offset so enemies don't spawn perfectly overlapping.
 			SpawnLocation.X += FMath::RandRange(-40.f, 40.f);
 			SpawnLocation.Y += FMath::RandRange(-40.f, 40.f);
 
@@ -146,9 +145,9 @@ void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
 			}
 			else
 			{
-				// Failed spawns must not count toward the wave total either, for the same reason.
+				// Failed spawns must be removed from the completion target.
 				TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - 1);
-				UE_LOG(LogTemp, Warning, TEXT("[IF-Wave] Failed to spawn %s at %s"),
+				UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Failed to spawn %s at %s"),
 					*Group.EnemyClass->GetName(), *SpawnLocation.ToString());
 			}
 		}
@@ -181,11 +180,10 @@ void AIFWaveManager::HandleEnemyDied(AIFBaseCharacter* DeadEnemy)
 	EnemiesAlive = FMath::Max(0, EnemiesAlive - 1);
 	OnEnemiesAliveCountChanged.Broadcast(EnemiesAlive);
 
-	// Wave completes once every enemy configured in the wave has been spawned and killed.
 	if (EnemiesAlive <= 0 && EnemiesSpawnedSoFar >= TotalEnemiesInWave)
 	{
 		bIsWaveActive = false;
-		UE_LOG(LogTemp, Log, TEXT("[IF-Wave] Wave %d complete."), CurrentWave);
+		UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Wave %d complete."), CurrentWave);
 		OnWaveCompleted.Broadcast(CurrentWave);
 	}
 }
@@ -221,8 +219,6 @@ void AIFWaveManager::BeginPlay()
 	CachePlayerAndStronghold();
 	BindPlayerDelegates();
 
-	// Bound in C++ so wave progression requires no Blueprint wiring: OnWaveCompleted fires
-	// when the last enemy in a wave dies, and this immediately starts the next one.
 	OnWaveCompleted.AddDynamic(this, &AIFWaveManager::HandleWaveCompleted);
 
 	if (bAutoStartOnBeginPlay)
@@ -276,7 +272,7 @@ void AIFWaveManager::CachePlayerAndStronghold()
 
 	if (!CachedPlayer)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-Wave] No AIFPlayerCharacter found in the level."));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] No AIFPlayerCharacter found in the level."));
 	}
 }
 

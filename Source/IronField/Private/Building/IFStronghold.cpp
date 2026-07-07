@@ -1,10 +1,10 @@
 #include "Building/IFStronghold.h"
-#include "Building/IFStrongholdAttackPoint.h"
-#include "Stats/IFHealthComponent.h"
-#include "Components/BoxComponent.h"
-#include "NiagaraFunctionLibrary.h"
-#include "Kismet/GameplayStatics.h"
+
+#include "Components/SphereComponent.h"
 #include "Core/IFStrongholdSubsystem.h"
+#include "Kismet/GameplayStatics.h"
+#include "NiagaraFunctionLibrary.h"
+#include "Stats/IFHealthComponent.h"
 
 AIFStronghold::AIFStronghold()
 {
@@ -14,17 +14,18 @@ AIFStronghold::AIFStronghold()
 
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
 	MeshComponent->SetupAttachment(RootComponent);
-	// Visual mesh keeps blocking collision (so pawns can't walk through the building) but
-	// does not generate overlaps - hit detection lives entirely on HitboxComponent instead.
 	MeshComponent->SetGenerateOverlapEvents(false);
+	MeshComponent->SetCanEverAffectNavigation(false);
 
-	HitboxComponent = CreateDefaultSubobject<UBoxComponent>(TEXT("HitboxComponent"));
+	HitboxComponent = CreateDefaultSubobject<USphereComponent>(TEXT("HitboxComponent"));
 	HitboxComponent->SetupAttachment(RootComponent);
-	HitboxComponent->SetBoxExtent(FVector(200.f, 200.f, 200.f));
-	HitboxComponent->SetCollisionObjectType(ECC_WorldDynamic);
+	HitboxComponent->SetSphereRadius(600.f);
+	HitboxComponent->SetCollisionObjectType(ECC_GameTraceChannel1);
 	HitboxComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
 	HitboxComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	HitboxComponent->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
+	// Weapon boxes are WorldDynamic, so the objective hitbox must explicitly overlap that channel.
+	HitboxComponent->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	HitboxComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	HitboxComponent->SetGenerateOverlapEvents(true);
 
@@ -34,6 +35,17 @@ AIFStronghold::AIFStronghold()
 void AIFStronghold::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (MeshComponent && MeshComponent->GetStaticMesh())
+	{
+		const float MeshWorldRadius = MeshComponent->Bounds.SphereRadius;
+		const float MinRadius = MeshWorldRadius + AttackRangeMargin;
+
+		if (HitboxComponent->GetScaledSphereRadius() < MinRadius)
+		{
+			HitboxComponent->SetSphereRadius(MinRadius);
+		}
+	}
 
 	if (HealthComponent)
 	{
@@ -67,6 +79,16 @@ void AIFStronghold::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		HealthComponent->OnHealthChanged.RemoveAll(this);
 		HealthComponent->OnHealthDepleted.RemoveAll(this);
 	}
+}
+
+float AIFStronghold::GetAttackAreaRange() const
+{
+	return HitboxComponent ? (HitboxComponent->GetScaledSphereRadius() + AttackAreaRangeMargin) : 0.f;
+}
+
+float AIFStronghold::GetAttackAreaAcceptanceRadius() const
+{
+	return HitboxComponent ? FMath::Max(0.f, HitboxComponent->GetScaledSphereRadius() + MoveAcceptanceRadiusMargin) : 0.f;
 }
 
 void AIFStronghold::HandleHealthChanged(float Percent)
@@ -106,44 +128,4 @@ void AIFStronghold::HandleDestruction()
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	HitboxComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	SetActorEnableCollision(false);
-}
-
-AIFStrongholdAttackPoint* AIFStronghold::ReserveNearestFreeAttackPoint(const FVector& FromLocation)
-{
-	AIFStrongholdAttackPoint* Best = nullptr;
-	float BestDistSq = TNumericLimits<float>::Max();
-
-	for (AIFStrongholdAttackPoint* const Point : AttackPoints)
-	{
-		if (!Point || Point->IsOccupied())
-		{
-			continue;
-		}
-
-		const float DistSq = FVector::DistSquared(FromLocation, Point->GetActorLocation());
-		if (DistSq < BestDistSq)
-		{
-			BestDistSq = DistSq;
-			Best = Point;
-		}
-	}
-
-	if (Best)
-	{
-		Best->SetOccupied(true);
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-Stronghold] No free attack points available (configured: %d)"), AttackPoints.Num());
-	}
-
-	return Best;
-}
-
-void AIFStronghold::ReleaseAttackPoint(AIFStrongholdAttackPoint* Point)
-{
-	if (Point)
-	{
-		Point->SetOccupied(false);
-	}
 }

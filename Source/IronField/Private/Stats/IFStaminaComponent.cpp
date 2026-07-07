@@ -6,9 +6,6 @@ UIFStaminaComponent::UIFStaminaComponent()
     PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
-// ============================================================================
-// Actions
-// ============================================================================
 
 bool UIFStaminaComponent::TryConsumeStamina(float Amount)
 {
@@ -49,18 +46,12 @@ void UIFStaminaComponent::StopContinuousDrain()
     UpdateTickForRegen();
 }
 
-// ============================================================================
-// Queries
-// ============================================================================
 
 float UIFStaminaComponent::GetStaminaPercent() const
 {
     return CurrentStamina / MaxStamina;
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 void UIFStaminaComponent::BeginPlay()
 {
@@ -72,7 +63,7 @@ void UIFStaminaComponent::BeginPlay()
 
     CurrentStamina = MaxStamina;
 
-    // Initialize to delay to prevent immediate regeneration on spawn.
+    // Spawned actors should not begin ticking solely to regenerate from a full bar.
     TimeSinceLastStaminaDrain = StaminaRegenDelay;
     ContinuousDrainRate = 0.f;
 
@@ -92,9 +83,6 @@ void UIFStaminaComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
     RegenerateStamina(DeltaTime);
 }
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
 
 bool UIFStaminaComponent::IsDrainingStamina() const
 {

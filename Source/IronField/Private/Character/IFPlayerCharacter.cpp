@@ -1,10 +1,9 @@
 #include "Character/IFPlayerCharacter.h"
-#include "Animation/AnimInstance.h"
+
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Combat/IFCombatComponent.h"
 #include "Combat/IFPlayerCombatComponent.h"
-#include "Core/IFAnimMontageUtils.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
 #include "EnhancedInputComponent.h"
@@ -208,7 +207,6 @@ void AIFPlayerCharacter::StartReviveTimer()
         return;
     }
 
-    // "false" means don't loop - revive should only trigger once per death.
     World->GetTimerManager().SetTimer(ReviveTimerHandle, this, &AIFPlayerCharacter::AttemptRevive, ReviveDelaySeconds, false);
 }
 
@@ -225,7 +223,6 @@ void AIFPlayerCharacter::AttemptRevive()
     Health->SetInvincible(true);
     Combat->HandleOwnerRevived();
 
-    // Restore capsule collision immediately so the character doesn't fall through the floor
     UCapsuleComponent* const Capsule = GetCapsuleComponent();
     if (Capsule)
     {
@@ -234,7 +231,6 @@ void AIFPlayerCharacter::AttemptRevive()
         Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
     }
 
-    // Also restore skeletal mesh collision
     USkeletalMeshComponent* const LocalMesh = GetMesh();
     if (LocalMesh)
     {
@@ -248,10 +244,9 @@ void AIFPlayerCharacter::AttemptRevive()
         Movement->SetMovementMode(MOVE_Walking);
     }
 
-    // Visual get-up is now handled by the AnimBP State Machine.
     bIsGettingUp = true;
 
-    // Fallback timer to ensure player doesn't get stuck if NotifyGetUpFinished is not called by AnimBP
+    // AnimBP should finish get-up; this prevents a permanent lockout if the notify is missing.
     UWorld* const World = GetWorld();
     if (World)
     {

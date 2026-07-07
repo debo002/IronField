@@ -6,7 +6,6 @@
 #include "InputActionValue.h"
 #include "IFPlayerCharacter.generated.h"
 
-class UAnimMontage;
 class UCameraComponent;
 class UEnhancedInputComponent;
 class UInputAction;
@@ -14,9 +13,6 @@ class UInputMappingContext;
 class USpringArmComponent;
 class UIFPlayerCombatComponent;
 
-/**
- * Represents the playable character controlled by the user.
- */
 UCLASS()
 class IRONFIELD_API AIFPlayerCharacter : public AIFBaseCharacter
 {
@@ -89,15 +85,12 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float AttackMoveSpeed = 260.f;
 
-    // Dot product threshold to detect if the movement input direction qualifies as "sprinting forward".
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float SprintInputThreshold = 0.5f;
 
-    // Input magnitude threshold to determine if the player is backpedaling (should be negative).
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float BackpedalInputThreshold = -0.1f;
 
-    // Squared speed threshold to determine if the player has decelerated enough to stop sprinting.
     UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
     float SprintExitSpeedSquared = 100.f;
 
@@ -119,38 +112,30 @@ protected:
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     FVector DeathCameraSocketOffset = FVector(0.f, 0.f, 120.f);
 
-    // Interpolation speed for smooth camera transitions between states (e.g., alive to death).
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     float CameraTransitionInterpSpeed = 3.f;
 
-    // Fixed pitch for the top-down camera boom (negative = looking downward).
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     float CameraBoomPitch = -52.f;
 
-    // Spring arm camera lag speed (higher = snappier follow).
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     float CameraLagSpeed = 10.f;
 
-    // Spring arm rotation lag speed.
     UPROPERTY(EditDefaultsOnly, Category = "Player|Camera")
     float CameraRotationLagSpeed = 12.f;
 
-    // Time to wait on the ground, dead, before getting back up.
     UPROPERTY(EditDefaultsOnly, Category = "Player|Gameplay")
     float ReviveDelaySeconds = 10.f;
 
-    // Fallback duration to wait during get-up animation before giving control back to the player.
     UPROPERTY(EditDefaultsOnly, Category = "Player|Gameplay")
     float GetUpDuration = 2.5f;
 
     virtual void OnDeathStarted() override;
 
-    // Called once the death montage finishes - starts the revive countdown.
     virtual void OnDeathMontageFinished() override;
 
     virtual void OnStaminaDepleted() override;
 
-    // Called once revive fully completes (after the get-up animation finishes).
     void OnReviveFinished();
 
 private:

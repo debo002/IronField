@@ -1,12 +1,10 @@
 #include "Combat/IFPlayerCombatComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "Core/IFLog.h"
 #include "Core/IFAnimMontageUtils.h"
 #include "Stats/IFStaminaComponent.h"
 
-// ============================================================================
-// Actions
-// ============================================================================
 
 void UIFPlayerCombatComponent::StartSpinAttack()
 {
@@ -27,13 +25,12 @@ void UIFPlayerCombatComponent::StartSpinAttack()
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	if (!AnimInstance || !SpinAttackMontage || AnimInstance->Montage_Play(SpinAttackMontage) <= 0.f)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[IF-Combat] %s could not start spin attack - missing AnimInstance or SpinAttackMontage."), *GetNameSafe(GetOwner()));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s could not start spin attack - missing AnimInstance or SpinAttackMontage."), *GetNameSafe(GetOwner()));
 		StopSpinImmediately();
 		RestoreIdleStateUnlessDead();
 		return;
 	}
 
-	// Intro plays once into Loop; Loop repeats until StopSpinAttack redirects it to End.
 	AnimInstance->Montage_SetNextSection(SpinIntroSectionName, SpinLoopSectionName, SpinAttackMontage);
 	AnimInstance->Montage_SetNextSection(SpinLoopSectionName, SpinLoopSectionName, SpinAttackMontage);
 	AnimInstance->Montage_JumpToSection(SpinIntroSectionName, SpinAttackMontage);
@@ -53,9 +50,6 @@ void UIFPlayerCombatComponent::StopSpinAttack()
 	StopSpinGracefully();
 }
 
-// ============================================================================
-// Lifecycle
-// ============================================================================
 
 void UIFPlayerCombatComponent::BeginPlay()
 {
@@ -85,9 +79,6 @@ void UIFPlayerCombatComponent::ResetCombatState()
 	Super::ResetCombatState();
 }
 
-// ============================================================================
-// Queries (overrides)
-// ============================================================================
 
 float UIFPlayerCombatComponent::GetCurrentAttackDamage() const
 {
@@ -99,9 +90,6 @@ TSubclassOf<UDamageType> UIFPlayerCombatComponent::GetCurrentDamageTypeClass() c
 	return bIsSpinning ? SpinDamageTypeClass : Super::GetCurrentDamageTypeClass();
 }
 
-// ============================================================================
-// Internal helpers
-// ============================================================================
 
 void UIFPlayerCombatComponent::StopSpinGracefully()
 {
@@ -151,7 +139,6 @@ void UIFPlayerCombatComponent::HandleSpinMontageEnded(UAnimMontage* Montage, boo
 		return;
 	}
 
-	// Montage already finished naturally; this just clears remaining state.
 	StopSpinImmediately();
 	RestoreIdleStateUnlessDead();
 }

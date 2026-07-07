@@ -6,22 +6,15 @@
 
 class UDamageType;
 
-/**
- * Adds the player-only spin attack on top of the base combat component. The spin attack is a
- * "hold to keep spinning" move - it loops via montage sections rather than the combo system,
- * so it's handled entirely outside StartAttack/ComboSteps.
- */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFPlayerCombatComponent : public UIFCombatComponent
 {
 	GENERATED_BODY()
 
 public:
-	// Starts spinning if idle and stamina allows. Loops until stopped or stamina runs out.
 	UFUNCTION(BlueprintCallable, Category = "Combat|Actions")
 	void StartSpinAttack();
 
-	// Ends the spin - finishes the current loop and plays the exit animation rather than stopping instantly.
 	UFUNCTION(BlueprintCallable, Category = "Combat|Actions")
 	void StopSpinAttack();
 
@@ -31,27 +24,21 @@ protected:
 
 	virtual void ResetCombatState() override;
 
-	// Can't chain a normal combo while spinning.
 	virtual bool CanQueueComboAttack() const override { return !bIsSpinning; }
 
-	// Spin isn't part of the combo array, so it needs its own damage value.
 	virtual float GetCurrentAttackDamage() const override;
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override;
 
 private:
-	//~ Begin Configured
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAnimMontage> SpinAttackMontage;
 
-	// Section for the spin's entry animation (plays once, at the start).
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation", meta = (AllowPrivateAccess = "true"))
 	FName SpinIntroSectionName = TEXT("Intro");
 
-	// Section for the spin's loop animation (repeats while spinning continues).
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation", meta = (AllowPrivateAccess = "true"))
 	FName SpinLoopSectionName = TEXT("Loop");
 
-	// Section for the spin's exit animation (plays once, when spinning stops).
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation", meta = (AllowPrivateAccess = "true"))
 	FName SpinEndSectionName = TEXT("End");
 
@@ -61,7 +48,6 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Stamina", meta = (AllowPrivateAccess = "true"))
 	float MinimumStaminaToStartSpin = 5.f;
 
-	// Blend-out time when the spin is cut short (e.g. on death).
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Animation", meta = (AllowPrivateAccess = "true"))
 	float SpinBlendOutTime = 0.1f;
 
@@ -70,7 +56,6 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Combat|Damage", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UDamageType> SpinDamageTypeClass;
-	//~ End Configured
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Combat|State", meta = (AllowPrivateAccess = "true"))
 	bool bIsSpinning = false;
@@ -81,9 +66,7 @@ private:
 	UFUNCTION()
 	void HandleStaminaDepleted();
 
-	// Ends the spin naturally via its exit animation (input released or stamina ran out).
 	void StopSpinGracefully();
 
-	// Hard-stops the spin with no exit animation (death, EndPlay, full reset).
 	void StopSpinImmediately();
 };
