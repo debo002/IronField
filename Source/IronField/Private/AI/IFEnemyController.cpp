@@ -40,8 +40,7 @@ bool AIFEnemyController::IsReadyForNewAttack()
 		return true;
 	}
 
-	const float CooldownSeconds = FMath::RandRange(MinReattackCooldownSeconds, MaxReattackCooldownSeconds);
-	return (World->GetTimeSeconds() - LastAttackEndedTime) >= CooldownSeconds;
+	return (World->GetTimeSeconds() - LastAttackEndedTime) >= CurrentReattackCooldownSeconds;
 }
 
 void AIFEnemyController::OnPossess(APawn* InPawn)
@@ -195,6 +194,7 @@ void AIFEnemyController::HandleOwnCombatStateChanged(ECombatState PreviousState,
 		if (const UWorld* const World = GetWorld())
 		{
 			LastAttackEndedTime = World->GetTimeSeconds();
+			CurrentReattackCooldownSeconds = FMath::RandRange(MinReattackCooldownSeconds, MaxReattackCooldownSeconds);
 		}
 	}
 

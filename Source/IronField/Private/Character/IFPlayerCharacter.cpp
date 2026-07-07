@@ -196,6 +196,7 @@ void AIFPlayerCharacter::ClearReviveTimer()
     if (UWorld* const World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(ReviveTimerHandle);
+        World->GetTimerManager().ClearTimer(GetUpFallbackTimerHandle);
     }
 }
 
@@ -250,13 +251,17 @@ void AIFPlayerCharacter::AttemptRevive()
     UWorld* const World = GetWorld();
     if (World)
     {
-        FTimerHandle GetUpFallbackTimerHandle;
         World->GetTimerManager().SetTimer(GetUpFallbackTimerHandle, this, &AIFPlayerCharacter::NotifyGetUpFinished, GetUpDuration, false);
     }
 }
 
 void AIFPlayerCharacter::NotifyGetUpFinished()
 {
+    if (UWorld* const World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(GetUpFallbackTimerHandle);
+    }
+
     if (bIsGettingUp)
     {
         CompleteRevive();

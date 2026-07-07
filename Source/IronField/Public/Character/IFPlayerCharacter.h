@@ -185,4 +185,5 @@ private:
     void CompleteRevive();
 
     FTimerHandle ReviveTimerHandle;
+    FTimerHandle GetUpFallbackTimerHandle;
 };

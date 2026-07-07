@@ -55,6 +55,7 @@ protected:
 
 private:
 	float LastAttackEndedTime = -1.f;
+	float CurrentReattackCooldownSeconds = 0.f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AIFWaveManager> CachedWaveManager;
