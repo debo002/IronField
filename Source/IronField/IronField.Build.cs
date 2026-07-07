@@ -13,7 +13,8 @@ public class IronField : ModuleRules
 			"InputCore",
 			"EnhancedInput",
 			"UMG",
-			"Niagara"
+			"Niagara",
+			"NavigationSystem"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
