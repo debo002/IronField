@@ -3,20 +3,7 @@
 #include "AIController.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "Core/IFAttackAreaProvider.h"
-
-namespace
-{
-	float ResolveAttackRange(const AActor& TargetActor, float DefaultRange)
-	{
-		if (const IIFAttackAreaProvider* const Provider = Cast<IIFAttackAreaProvider>(&TargetActor))
-		{
-			return Provider->GetAttackAreaRange();
-		}
-
-		return DefaultRange;
-	}
-}
+#include "AI/IFBTAttackAreaUtils.h"
 
 UBTDecorator_IFInAttackRange::UBTDecorator_IFInAttackRange()
 {

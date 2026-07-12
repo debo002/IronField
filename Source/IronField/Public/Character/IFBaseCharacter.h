@@ -52,16 +52,21 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Characters|Animation")
 	float DeathMontageBlendOutTime = 0.15f;
 
+	// Skeleton socket the weapon hit box attaches to. Applied in BeginPlay so Blueprint overrides work.
 	UPROPERTY(EditDefaultsOnly, Category = "Characters|Combat")
-	FVector WeaponCollisionExtent = FVector(20.f, 60.f, 20.f);
+	FName WeaponSocketName = TEXT("weapon_r");
 
 	virtual void OnDeathStarted() {}
 
-	virtual void OnDeathMontageFinished() {}
+	virtual void OnDeathSequenceStarted() {}
 
 	virtual void OnStaminaDepleted() {}
 
 	UAnimInstance* GetMeshAnimInstance() const;
+
+	void StopMovementForDeath();
+	void DisableCollisionForDeath();
+	void RestoreCollisionAfterDeath();
 
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Characters|Components", meta = (AllowPrivateAccess = "true"))
@@ -84,7 +89,5 @@ private:
 
 	void BindGameplayDelegates();
 	void UnbindGameplayDelegates();
-
-	void StopMovementForDeath();
-	void DisableCollisionForDeath();
+	void AttachWeaponCollisionToSocket();
 };

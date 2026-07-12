@@ -3,21 +3,8 @@
 #include "AIController.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
-#include "Core/IFAttackAreaProvider.h"
+#include "AI/IFBTAttackAreaUtils.h"
 #include "Navigation/PathFollowingComponent.h"
-
-namespace
-{
-	float ResolveAcceptanceRadius(const AActor& TargetActor, float DefaultRadius)
-	{
-		if (const IIFAttackAreaProvider* const Provider = Cast<IIFAttackAreaProvider>(&TargetActor))
-		{
-			return Provider->GetAttackAreaAcceptanceRadius();
-		}
-
-		return DefaultRadius;
-	}
-}
 
 UBTTask_IFMoveToTarget::UBTTask_IFMoveToTarget()
 {
@@ -49,7 +36,7 @@ EBTNodeResult::Type UBTTask_IFMoveToTarget::ExecuteTask(UBehaviorTreeComponent& 
 
 	const float Radius = ResolveAcceptanceRadius(*TargetActor, AcceptanceRadius);
 
-	// The resolved radius already includes target-specific geometry; engine overlap expansion would double count it.
+	// Radius already includes target geometry; bStopOnOverlap would expand it again and stop too early.
 	const EPathFollowingRequestResult::Type RequestResult = AIController->MoveToActor(TargetActor, Radius, false);
 
 	switch (RequestResult)

@@ -2,166 +2,145 @@
 
 UIFStaminaComponent::UIFStaminaComponent()
 {
-    PrimaryComponentTick.bCanEverTick = true;
-    PrimaryComponentTick.bStartWithTickEnabled = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
 
 bool UIFStaminaComponent::TryConsumeStamina(float Amount)
 {
-    if (Amount <= 0.f)
-    {
-        return true;
-    }
+	if (Amount <= 0.f)
+	{
+		return true;
+	}
 
-    if (!HasStamina(Amount))
-    {
-        return false;
-    }
+	if (!HasStamina(Amount))
+	{
+		return false;
+	}
 
-    SetStaminaClamped(CurrentStamina - Amount);
-    TimeSinceLastStaminaDrain = 0.f;
+	SetStaminaClamped(CurrentStamina - Amount);
+	TimeSinceLastStaminaDrain = 0.f;
 
-    if (StaminaRegenRate > 0.f)
-    {
-        EnableStaminaTick();
-    }
+	if (StaminaRegenRate > 0.f)
+	{
+		SetComponentTickEnabled(true);
+	}
 
-    return true;
+	return true;
 }
 
 void UIFStaminaComponent::StartContinuousDrain(float DrainRate)
 {
-    ContinuousDrainRate = FMath::Max(0.f, DrainRate);
+	ContinuousDrainRate = FMath::Max(0.f, DrainRate);
 
-    if (IsDrainingStamina() && CurrentStamina > 0.f)
-    {
-        EnableStaminaTick();
-    }
+	if (IsDrainingStamina() && CurrentStamina > 0.f)
+	{
+		SetComponentTickEnabled(true);
+	}
 }
 
 void UIFStaminaComponent::StopContinuousDrain()
 {
-    ContinuousDrainRate = 0.f;
-    UpdateTickForRegen();
+	ContinuousDrainRate = 0.f;
+	UpdateTickEnabled();
 }
 
 
 float UIFStaminaComponent::GetStaminaPercent() const
 {
-    return CurrentStamina / MaxStamina;
+	return MaxStamina > 0.f ? CurrentStamina / MaxStamina : 0.f;
 }
 
 
 void UIFStaminaComponent::BeginPlay()
 {
-    Super::BeginPlay();
+	Super::BeginPlay();
 
-    MaxStamina = FMath::Max(1.f, MaxStamina);
-    StaminaRegenRate = FMath::Max(0.f, StaminaRegenRate);
-    StaminaRegenDelay = FMath::Max(0.f, StaminaRegenDelay);
+	MaxStamina = FMath::Max(1.f, MaxStamina);
+	StaminaRegenRate = FMath::Max(0.f, StaminaRegenRate);
+	StaminaRegenDelay = FMath::Max(0.f, StaminaRegenDelay);
 
-    CurrentStamina = MaxStamina;
+	CurrentStamina = MaxStamina;
 
-    // Spawned actors should not begin ticking solely to regenerate from a full bar.
-    TimeSinceLastStaminaDrain = StaminaRegenDelay;
-    ContinuousDrainRate = 0.f;
+	// Pretend the regen delay already elapsed so a full bar does not start ticking on spawn.
+	TimeSinceLastStaminaDrain = StaminaRegenDelay;
+	ContinuousDrainRate = 0.f;
 
-    OnStaminaChanged.Broadcast(GetStaminaPercent());
+	OnStaminaChanged.Broadcast(GetStaminaPercent());
 }
 
 void UIFStaminaComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
-    Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-    if (IsDrainingStamina())
-    {
-        DrainStamina(DeltaTime);
-        return;
-    }
+	if (IsDrainingStamina())
+	{
+		DrainStamina(DeltaTime);
+		return;
+	}
 
-    RegenerateStamina(DeltaTime);
+	RegenerateStamina(DeltaTime);
 }
 
-
-bool UIFStaminaComponent::IsDrainingStamina() const
-{
-    return ContinuousDrainRate > 0.f;
-}
 
 bool UIFStaminaComponent::CanRegenerateStamina() const
 {
-    return CurrentStamina < MaxStamina && StaminaRegenRate > 0.f;
+	return CurrentStamina < MaxStamina && StaminaRegenRate > 0.f;
 }
 
 void UIFStaminaComponent::DrainStamina(float DeltaTime)
 {
-    SetStaminaClamped(CurrentStamina - ContinuousDrainRate * DeltaTime);
-    TimeSinceLastStaminaDrain = 0.f;
+	SetStaminaClamped(CurrentStamina - ContinuousDrainRate * DeltaTime);
+	TimeSinceLastStaminaDrain = 0.f;
 
-    if (CurrentStamina <= 0.f)
-    {
-        StopContinuousDrain();
-    }
+	if (CurrentStamina <= 0.f)
+	{
+		StopContinuousDrain();
+	}
 }
 
 void UIFStaminaComponent::RegenerateStamina(float DeltaTime)
 {
-    TimeSinceLastStaminaDrain += DeltaTime;
-    if (TimeSinceLastStaminaDrain < StaminaRegenDelay)
-    {
-        return;
-    }
+	TimeSinceLastStaminaDrain += DeltaTime;
+	if (TimeSinceLastStaminaDrain < StaminaRegenDelay)
+	{
+		return;
+	}
 
-    SetStaminaClamped(CurrentStamina + StaminaRegenRate * DeltaTime);
+	SetStaminaClamped(CurrentStamina + StaminaRegenRate * DeltaTime);
 
-    if (CurrentStamina >= MaxStamina)
-    {
-        DisableStaminaTick();
-    }
+	if (CurrentStamina >= MaxStamina)
+	{
+		SetComponentTickEnabled(false);
+	}
 }
 
-void UIFStaminaComponent::UpdateTickForRegen()
+void UIFStaminaComponent::UpdateTickEnabled()
 {
-    if (CanRegenerateStamina())
-    {
-        EnableStaminaTick();
-        return;
-    }
-
-    DisableStaminaTick();
-}
-
-void UIFStaminaComponent::EnableStaminaTick()
-{
-    SetComponentTickEnabled(true);
-}
-
-void UIFStaminaComponent::DisableStaminaTick()
-{
-    SetComponentTickEnabled(false);
+	SetComponentTickEnabled(CanRegenerateStamina());
 }
 
 void UIFStaminaComponent::SetStaminaClamped(float NewStamina)
 {
-    const float PreviousStamina = CurrentStamina;
-    CurrentStamina = FMath::Clamp(NewStamina, 0.f, MaxStamina);
-    BroadcastStaminaChangedIfNeeded(PreviousStamina);
-    BroadcastStaminaDepletedIfNeeded(PreviousStamina);
+	const float PreviousStamina = CurrentStamina;
+	CurrentStamina = FMath::Clamp(NewStamina, 0.f, MaxStamina);
+	BroadcastStaminaChangedIfNeeded(PreviousStamina);
+	BroadcastStaminaDepletedIfNeeded(PreviousStamina);
 }
 
 void UIFStaminaComponent::BroadcastStaminaChangedIfNeeded(float PreviousStamina)
 {
-    if (!FMath::IsNearlyEqual(CurrentStamina, PreviousStamina))
-    {
-        OnStaminaChanged.Broadcast(GetStaminaPercent());
-    }
+	if (!FMath::IsNearlyEqual(CurrentStamina, PreviousStamina))
+	{
+		OnStaminaChanged.Broadcast(GetStaminaPercent());
+	}
 }
 
 void UIFStaminaComponent::BroadcastStaminaDepletedIfNeeded(float PreviousStamina)
 {
-    if (PreviousStamina > 0.f && CurrentStamina <= 0.f)
-    {
-        OnStaminaDepleted.Broadcast();
-    }
+	if (PreviousStamina > 0.f && CurrentStamina <= 0.f)
+	{
+		OnStaminaDepleted.Broadcast();
+	}
 }

@@ -18,7 +18,7 @@ class IRONFIELD_API AIFEnemyController : public AAIController
 public:
 	AIFEnemyController();
 
-	bool IsReadyForNewAttack();
+	bool IsReadyForNewAttack() const;
 
 	UIFCombatComponent* GetControlledCombatComponent() const;
 
@@ -44,24 +44,17 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
 	float MaxBlockHoldSeconds = 1.6f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Movement")
-	float ChaseSpeed = 300.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Movement")
-	float AttackingSpeed = 120.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Movement")
-	float BlockingSpeed = 160.f;
-
 private:
 	float LastAttackEndedTime = -1.f;
 	float CurrentReattackCooldownSeconds = 0.f;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UIFCombatComponent> CachedCombatComponent;
+
+	UPROPERTY(Transient)
 	TObjectPtr<AIFWaveManager> CachedWaveManager;
 
 	FTimerHandle BlockHoldTimerHandle;
-	FTimerHandle PostPossessionInitTimerHandle;
 	FDelegateHandle TargetObserverHandle;
 
 	UFUNCTION()
@@ -90,6 +83,7 @@ private:
 	void BindPlayerBlockingDelegates();
 	void UnbindPlayerBlockingDelegates();
 
+	void ClearBlockHoldTimer();
 	void StopBlockAfterHold();
 
 	void ApplyMovementSpeedForState(ECombatState State);

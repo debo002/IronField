@@ -107,6 +107,7 @@ void UIFPlayerCombatComponent::StopSpinGracefully()
 		return;
 	}
 
+	// Exit the loop section into End; combat stays Attacking until the montage end delegate fires.
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	if (AnimInstance && SpinAttackMontage)
 	{
@@ -132,7 +133,7 @@ void UIFPlayerCombatComponent::StopSpinImmediately()
 	}
 }
 
-void UIFPlayerCombatComponent::HandleSpinMontageEnded(UAnimMontage* Montage, bool )
+void UIFPlayerCombatComponent::HandleSpinMontageEnded(UAnimMontage* Montage, bool)
 {
 	if (Montage != SpinAttackMontage)
 	{

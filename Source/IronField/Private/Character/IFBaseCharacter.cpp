@@ -18,11 +18,11 @@ AIFBaseCharacter::AIFBaseCharacter(const FObjectInitializer& ObjectInitializer)
 	CombatComponent = CreateDefaultSubobject<UIFCombatComponent>(TEXT("Combat"));
 
 	WeaponCollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollision"));
-	WeaponCollisionBox->SetupAttachment(GetMesh(), FName("weapon_r"));
-	WeaponCollisionBox->SetBoxExtent(WeaponCollisionExtent);
+	WeaponCollisionBox->SetupAttachment(GetMesh(), WeaponSocketName);
 	WeaponCollisionBox->SetCollisionObjectType(ECC_WorldDynamic);
 	WeaponCollisionBox->SetCollisionResponseToAllChannels(ECR_Ignore);
 	WeaponCollisionBox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	// ECC_GameTraceChannel1 is the project "Hittable Objectives" channel (e.g. stronghold hitbox).
 	WeaponCollisionBox->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
 	WeaponCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	WeaponCollisionBox->SetGenerateOverlapEvents(false);
@@ -59,6 +59,7 @@ void AIFBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	AttachWeaponCollisionToSocket();
 	BindGameplayDelegates();
 }
 
@@ -73,11 +74,11 @@ void AIFBaseCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
 
+	// Corpses keep falling physics until they land, then become fully inert.
 	if (HealthComponent && HealthComponent->IsDead())
 	{
 		if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 		{
-			// Falling corpses keep physics until they land, then become fully inert.
 			Movement->DisableMovement();
 		}
 	}
@@ -144,8 +145,8 @@ void AIFBaseCharacter::HandleDeath()
 	OnDeathStarted();
 	OnCharacterDied.Broadcast(this);
 
-	// Death completion is visual-only after this point; AnimBP owns the pose.
-	OnDeathMontageFinished();
+	// After this, death is visual only — AnimBP owns the pose.
+	OnDeathSequenceStarted();
 }
 
 void AIFBaseCharacter::StopMovementForDeath()
@@ -182,13 +183,46 @@ void AIFBaseCharacter::DisableCollisionForDeath()
 	}
 }
 
+void AIFBaseCharacter::RestoreCollisionAfterDeath()
+{
+	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		Capsule->SetCollisionProfileName(FName("Pawn"));
+		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		Capsule->SetCanEverAffectNavigation(true);
+	}
+
+	if (USkeletalMeshComponent* const LocalMesh = GetMesh())
+	{
+		LocalMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		LocalMesh->SetCollisionProfileName(FName("CharacterMesh"));
+		LocalMesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		LocalMesh->SetCanEverAffectNavigation(true);
+	}
+
+	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
+	{
+		Movement->SetMovementMode(MOVE_Walking);
+	}
+}
+
+void AIFBaseCharacter::AttachWeaponCollisionToSocket()
+{
+	if (!WeaponCollisionBox || !GetMesh() || WeaponSocketName.IsNone())
+	{
+		return;
+	}
+
+	// KeepRelative preserves box offsets tuned on the Blueprint; only the socket name is reapplied.
+	WeaponCollisionBox->AttachToComponent(
+		GetMesh(),
+		FAttachmentTransformRules::KeepRelativeTransform,
+		WeaponSocketName);
+}
+
 UAnimInstance* AIFBaseCharacter::GetMeshAnimInstance() const
 {
 	USkeletalMeshComponent* const LocalMesh = GetMesh();
-	if (!LocalMesh)
-	{
-		return nullptr;
-	}
-
-	return LocalMesh->GetAnimInstance();
+	return LocalMesh ? LocalMesh->GetAnimInstance() : nullptr;
 }

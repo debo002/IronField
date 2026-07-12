@@ -20,11 +20,12 @@ AIFStronghold::AIFStronghold()
 	HitboxComponent = CreateDefaultSubobject<USphereComponent>(TEXT("HitboxComponent"));
 	HitboxComponent->SetupAttachment(RootComponent);
 	HitboxComponent->SetSphereRadius(600.f);
+	// ECC_GameTraceChannel1 is the project "Hittable Objectives" channel (shared with weapon boxes).
 	HitboxComponent->SetCollisionObjectType(ECC_GameTraceChannel1);
 	HitboxComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
 	HitboxComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
 	HitboxComponent->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
-	// Weapon boxes are WorldDynamic, so the objective hitbox must explicitly overlap that channel.
+	// Weapon collision boxes are WorldDynamic; they must explicitly overlap this channel.
 	HitboxComponent->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
 	HitboxComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	HitboxComponent->SetGenerateOverlapEvents(true);
@@ -39,7 +40,7 @@ void AIFStronghold::BeginPlay()
 	if (MeshComponent && MeshComponent->GetStaticMesh())
 	{
 		const float MeshWorldRadius = MeshComponent->Bounds.SphereRadius;
-		const float MinRadius = MeshWorldRadius + AttackRangeMargin;
+		const float MinRadius = MeshWorldRadius + HitboxMeshPaddingRadius;
 
 		if (HitboxComponent->GetScaledSphereRadius() < MinRadius)
 		{
@@ -93,7 +94,8 @@ float AIFStronghold::GetAttackAreaAcceptanceRadius() const
 
 void AIFStronghold::HandleHealthChanged(float Percent)
 {
-	if (Percent <= 0.0f)
+	// Health broadcasts full health on BeginPlay for UI; skip that and the death (0%) case.
+	if (Percent <= 0.f || FMath::IsNearlyEqual(Percent, 1.f))
 	{
 		return;
 	}
@@ -124,8 +126,16 @@ void AIFStronghold::HandleDestruction()
 {
 	OnStrongholdDestroyed.Broadcast(this);
 
-	MeshComponent->SetVisibility(false);
-	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	HitboxComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (MeshComponent)
+	{
+		MeshComponent->SetVisibility(false);
+		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
+	if (HitboxComponent)
+	{
+		HitboxComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	}
+
 	SetActorEnableCollision(false);
 }

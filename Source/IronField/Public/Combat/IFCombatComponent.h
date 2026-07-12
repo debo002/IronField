@@ -12,6 +12,7 @@ class UIFHealthComponent;
 class UIFStaminaComponent;
 class USkeletalMeshComponent;
 class UPrimitiveComponent;
+
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class IRONFIELD_API UIFCombatComponent : public UActorComponent
 {
@@ -45,7 +46,6 @@ public:
 	void HandleOwnerRevived();
 
 	void BeginAttackCollision();
-
 	void EndAttackCollision();
 
 	void ReceiveMeleeAttack(AActor* Instigator, float Damage, TSubclassOf<UDamageType> DamageTypeClass);
@@ -168,6 +168,7 @@ private:
 
 	bool TryRegisterAttackHit(AActor* TargetActor);
 
+	// Null for self, corpses, and AI-vs-AI so enemy weapon boxes can overlap in a pack without friendly fire.
 	UIFHealthComponent* GetValidAttackTargetHealth(AActor* TargetActor) const;
 
 	bool IsOwnerFacingTarget(AActor* TargetActor) const;

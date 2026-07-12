@@ -4,7 +4,7 @@
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Character/IFBaseCharacter.h"
-#include "Kismet/GameplayStatics.h"
+#include "Core/IFWaveManagerSubsystem.h"
 #include "Wave/IFWaveManager.h"
 
 namespace
@@ -17,8 +17,14 @@ namespace
 
 	AIFWaveManager* ResolveWaveManager(UBehaviorTreeComponent& OwnerComp)
 	{
-		UWorld* const World = OwnerComp.GetWorld();
-		return World ? Cast<AIFWaveManager>(UGameplayStatics::GetActorOfClass(World, AIFWaveManager::StaticClass())) : nullptr;
+		if (const UWorld* const World = OwnerComp.GetWorld())
+		{
+			if (const UIFWaveManagerSubsystem* const Subsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
+			{
+				return Subsystem->GetWaveManager();
+			}
+		}
+		return nullptr;
 	}
 }
 
@@ -106,11 +112,17 @@ void UBTService_IFFindTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
 	{
 		WaveManager = ResolveWaveManager(OwnerComp);
 		Memory->WaveManager = WaveManager;
-		if (!WaveManager) return;
+		if (!WaveManager)
+		{
+			return;
+		}
 	}
 
 	UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
-	if (!Blackboard) return;
+	if (!Blackboard)
+	{
+		return;
+	}
 
 	AActor* const CurrentTarget = Cast<AActor>(Blackboard->GetValueAsObject(TargetActorKey.SelectedKeyName));
 
@@ -144,7 +156,17 @@ void UBTService_IFFindTarget::TickNode(UBehaviorTreeComponent& OwnerComp, uint8*
 void UBTService_IFFindTarget::PickInitialTarget(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, AIFWaveManager& WaveManager) const
 {
 	FIFFindTargetMemory* const Memory = reinterpret_cast<FIFFindTargetMemory*>(NodeMemory);
-	if (!Memory) return;
+	if (!Memory)
+	{
+		return;
+	}
+
+	// Single handoff point for slot release so we never double-release.
+	if (Memory->bHoldingPlayerSlot)
+	{
+		WaveManager.ReleaseEngagementSlot();
+		Memory->bHoldingPlayerSlot = false;
+	}
 
 	const bool bRolledPlayer = (FMath::FRand() < PlayerTargetSpawnChance);
 	AActor* NewTarget = nullptr;
@@ -176,60 +198,65 @@ void UBTService_IFFindTarget::PickInitialTarget(UBehaviorTreeComponent& OwnerCom
 
 void UBTService_IFFindTarget::ReEvaluateStrongholdTarget(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, AIFWaveManager& WaveManager) const
 {
-	FIFFindTargetMemory* const Memory = reinterpret_cast<FIFFindTargetMemory*>(NodeMemory);
-	if (!Memory) return;
-
 	const UWorld* const World = OwnerComp.GetWorld();
-	if (!World) return;
+	if (!World)
+	{
+		return;
+	}
 
 	const float Now = World->GetTimeSeconds();
 	const float LastAttack = WaveManager.GetLastPlayerAttackTime();
 	const float LastRevive = WaveManager.GetLastPlayerReviveTime();
-	const float ReviveCheckWindowSeconds = FMath::Max(Interval, 0.1f);
 
 	const bool bPlayerAttackedRecently = (LastAttack >= 0.f) && ((Now - LastAttack) <= PlayerAttackRecencyWindowSeconds);
 	const bool bPlayerJustRevived = (LastRevive >= 0.f) && ((Now - LastRevive) <= ReviveCheckWindowSeconds);
 
+	if (bPlayerAttackedRecently && TrySwitchToPlayer(OwnerComp, NodeMemory, WaveManager, SwitchToPlayerAfterAttackChance))
+	{
+		return;
+	}
+
+	if (bPlayerJustRevived)
+	{
+		TrySwitchToPlayer(OwnerComp, NodeMemory, WaveManager, SwitchToPlayerAfterReviveChance);
+	}
+}
+
+bool UBTService_IFFindTarget::TrySwitchToPlayer(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, AIFWaveManager& WaveManager, float SwitchChance) const
+{
+	if (FMath::FRand() >= SwitchChance)
+	{
+		return false;
+	}
+
+	FIFFindTargetMemory* const Memory = reinterpret_cast<FIFFindTargetMemory*>(NodeMemory);
 	const APawn* const ControlledPawn = OwnerComp.GetAIOwner() ? OwnerComp.GetAIOwner()->GetPawn() : nullptr;
-	if (!ControlledPawn) return;
-
-	if (bPlayerAttackedRecently && FMath::FRand() < SwitchToPlayerAfterAttackChance)
+	if (!Memory || !ControlledPawn)
 	{
-		AActor* const PlayerActor = WaveManager.GetPlayerActor();
-		AIFBaseCharacter* const PlayerChar = Cast<AIFBaseCharacter>(PlayerActor);
-		if (PlayerChar && !PlayerChar->IsDead())
-		{
-			const float DistToPlayer = FVector::Dist(ControlledPawn->GetActorLocation(), PlayerChar->GetActorLocation());
-			if (DistToPlayer <= 1500.f && WaveManager.TryReserveEngagementSlot())
-			{
-				Memory->bHoldingPlayerSlot = true;
-				SetBlackboardTarget(OwnerComp, PlayerActor);
-				return;
-			}
-		}
+		return false;
 	}
 
-	if (bPlayerJustRevived && FMath::FRand() < SwitchToPlayerAfterReviveChance)
+	AActor* const PlayerActor = WaveManager.GetPlayerActor();
+	AIFBaseCharacter* const PlayerChar = Cast<AIFBaseCharacter>(PlayerActor);
+	if (!PlayerChar || PlayerChar->IsDead())
 	{
-		AActor* const PlayerActor = WaveManager.GetPlayerActor();
-		AIFBaseCharacter* const PlayerChar = Cast<AIFBaseCharacter>(PlayerActor);
-		if (PlayerChar && !PlayerChar->IsDead())
-		{
-			const float DistToPlayer = FVector::Dist(ControlledPawn->GetActorLocation(), PlayerChar->GetActorLocation());
-			if (DistToPlayer <= 1500.f && WaveManager.TryReserveEngagementSlot())
-			{
-				Memory->bHoldingPlayerSlot = true;
-				SetBlackboardTarget(OwnerComp, PlayerActor);
-				return;
-			}
-		}
+		return false;
 	}
+
+	const float DistToPlayer = FVector::Dist(ControlledPawn->GetActorLocation(), PlayerChar->GetActorLocation());
+	if (DistToPlayer > MaxPlayerSwitchDistance || !WaveManager.TryReserveEngagementSlot())
+	{
+		return false;
+	}
+
+	Memory->bHoldingPlayerSlot = true;
+	SetBlackboardTarget(OwnerComp, PlayerActor);
+	return true;
 }
 
 void UBTService_IFFindTarget::SetBlackboardTarget(UBehaviorTreeComponent& OwnerComp, AActor* NewTarget) const
 {
-	UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
-	if (Blackboard)
+	if (UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent())
 	{
 		Blackboard->SetValueAsObject(TargetActorKey.SelectedKeyName, NewTarget);
 	}

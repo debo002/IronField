@@ -3,44 +3,31 @@
 #include "Combat/IFCombatComponent.h"
 #include "GameFramework/Actor.h"
 
+namespace
+{
+	UIFCombatComponent* FindOwnerCombat(USkeletalMeshComponent* MeshComp)
+	{
+		const AActor* const Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
+		return Owner ? Owner->FindComponentByClass<UIFCombatComponent>() : nullptr;
+	}
+}
+
 void UIFAnimNotifyStateAttackCollision::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
-    Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
+	Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
 
-    if (!MeshComp)
-    {
-        return;
-    }
-
-    AActor* const Owner = MeshComp->GetOwner();
-    if (!Owner)
-    {
-        return;
-    }
-
-    if (UIFCombatComponent* const Combat = Owner->FindComponentByClass<UIFCombatComponent>())
-    {
-        Combat->BeginAttackCollision();
-    }
+	if (UIFCombatComponent* const Combat = FindOwnerCombat(MeshComp))
+	{
+		Combat->BeginAttackCollision();
+	}
 }
 
 void UIFAnimNotifyStateAttackCollision::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
 {
-    Super::NotifyEnd(MeshComp, Animation, EventReference);
+	Super::NotifyEnd(MeshComp, Animation, EventReference);
 
-    if (!MeshComp)
-    {
-        return;
-    }
-
-    AActor* const Owner = MeshComp->GetOwner();
-    if (!Owner)
-    {
-        return;
-    }
-
-    if (UIFCombatComponent* const Combat = Owner->FindComponentByClass<UIFCombatComponent>())
-    {
-        Combat->EndAttackCollision();
-    }
+	if (UIFCombatComponent* const Combat = FindOwnerCombat(MeshComp))
+	{
+		Combat->EndAttackCollision();
+	}
 }

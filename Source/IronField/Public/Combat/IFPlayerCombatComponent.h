@@ -24,7 +24,7 @@ protected:
 
 	virtual void ResetCombatState() override;
 
-	virtual bool CanQueueComboAttack() const override { return !bIsSpinning; }
+	virtual bool CanQueueComboAttack() const override { return !bIsSpinning && Super::CanQueueComboAttack(); }
 
 	virtual float GetCurrentAttackDamage() const override;
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override;

@@ -36,15 +36,23 @@ EBTNodeResult::Type UBTTask_IFAttack::ExecuteTask(UBehaviorTreeComponent& OwnerC
 	}
 
 	UIFCombatComponent* const Combat = EnemyController->GetControlledCombatComponent();
-	if (!Combat)
+	if (!Combat || !Combat->IsIdle())
 	{
 		return EBTNodeResult::Failed;
 	}
 
-	const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(ControlledPawn->GetActorLocation(), TargetActor->GetActorLocation());
+	const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(
+		ControlledPawn->GetActorLocation(),
+		TargetActor->GetActorLocation());
 	ControlledPawn->SetActorRotation(FRotator(0.f, LookAtRotation.Yaw, 0.f));
 
 	Combat->StartAttack();
+
+	// StartAttack can no-op (stamina, missing montage). Fail immediately so the tree retries later.
+	if (!Combat->IsAttacking())
+	{
+		return EBTNodeResult::Failed;
+	}
 
 	return EBTNodeResult::InProgress;
 }
@@ -61,8 +69,13 @@ void UBTTask_IFAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMe
 	}
 
 	const UIFCombatComponent* const Combat = EnemyController->GetControlledCombatComponent();
+	if (!Combat)
+	{
+		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
+		return;
+	}
 
-	if (!Combat || !Combat->IsAttacking())
+	if (!Combat->IsAttacking())
 	{
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	}

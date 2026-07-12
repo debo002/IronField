@@ -3,14 +3,14 @@
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
+#include "Character/IFEnemyCharacter.h"
 #include "Combat/IFCombatComponent.h"
 #include "Core/IFLog.h"
-#include "GameFramework/CharacterMovementComponent.h"
+#include "Core/IFWaveManagerSubsystem.h"
 #include "GameFramework/Pawn.h"
-#include "Wave/IFWaveManager.h"
-#include "Kismet/GameplayStatics.h"
 #include "Stats/IFHealthComponent.h"
 #include "TimerManager.h"
+#include "Wave/IFWaveManager.h"
 
 namespace
 {
@@ -23,11 +23,10 @@ AIFEnemyController::AIFEnemyController()
 
 UIFCombatComponent* AIFEnemyController::GetControlledCombatComponent() const
 {
-	const APawn* const ControlledPawn = GetPawn();
-	return ControlledPawn ? ControlledPawn->FindComponentByClass<UIFCombatComponent>() : nullptr;
+	return CachedCombatComponent;
 }
 
-bool AIFEnemyController::IsReadyForNewAttack()
+bool AIFEnemyController::IsReadyForNewAttack() const
 {
 	if (LastAttackEndedTime < 0.f)
 	{
@@ -61,10 +60,17 @@ void AIFEnemyController::InitializeAfterPossession()
 	}
 	else
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: BehaviorTreeAsset is not set on this controller."), *GetName());
+		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: BehaviorTreeAsset is not set."), *GetName());
 	}
 
-	CachedWaveManager = Cast<AIFWaveManager>(UGameplayStatics::GetActorOfClass(this, AIFWaveManager::StaticClass()));
+	if (const UWorld* const World = GetWorld())
+	{
+		if (const UIFWaveManagerSubsystem* const Subsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
+		{
+			CachedWaveManager = Subsystem->GetWaveManager();
+		}
+	}
+
 	if (CachedWaveManager)
 	{
 		CachedWaveManager->OnPlayerDied.AddDynamic(this, &AIFEnemyController::HandlePlayerDied);
@@ -81,10 +87,15 @@ void AIFEnemyController::InitializeAfterPossession()
 		{
 			UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: Blackboard has no key named 'TargetActor'."), *GetName());
 		}
-		TargetObserverHandle = BB->RegisterObserver(TargetKeyID, this,
-			FOnBlackboardChangeNotification::CreateUObject(this, &AIFEnemyController::HandleTargetBlackboardChanged));
+		else
+		{
+			TargetObserverHandle = BB->RegisterObserver(
+				TargetKeyID,
+				this,
+				FOnBlackboardChangeNotification::CreateUObject(this, &AIFEnemyController::HandleTargetBlackboardChanged));
 
-		HandleTargetBlackboardChanged(*BB, TargetKeyID);
+			HandleTargetBlackboardChanged(*BB, TargetKeyID);
+		}
 	}
 	else
 	{
@@ -96,35 +107,46 @@ void AIFEnemyController::InitializeAfterPossession()
 
 void AIFEnemyController::OnUnPossess()
 {
-	if (UWorld* const World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(PostPossessionInitTimerHandle);
-	}
+	ClearBlockHoldTimer();
 
 	if (UBlackboardComponent* const BB = GetBlackboardComponent())
 	{
-		BB->UnregisterObserver(BB->GetKeyID(TargetActorKeyName), TargetObserverHandle);
+		if (TargetObserverHandle.IsValid())
+		{
+			const FBlackboard::FKey TargetKeyID = BB->GetKeyID(TargetActorKeyName);
+			if (TargetKeyID != FBlackboard::InvalidKey)
+			{
+				BB->UnregisterObserver(TargetKeyID, TargetObserverHandle);
+			}
+			TargetObserverHandle.Reset();
+		}
 	}
 
 	UnbindOwnDelegates();
+	CachedCombatComponent = nullptr;
+	CachedWaveManager = nullptr;
 
 	Super::OnUnPossess();
 }
 
 void AIFEnemyController::BindOwnDelegates()
 {
-	if (UIFCombatComponent* const Combat = GetControlledCombatComponent())
+	const APawn* const ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		return;
+	}
+
+	CachedCombatComponent = ControlledPawn->FindComponentByClass<UIFCombatComponent>();
+	if (UIFCombatComponent* const Combat = CachedCombatComponent)
 	{
 		Combat->OnCombatStateChanged.AddDynamic(this, &AIFEnemyController::HandleOwnCombatStateChanged);
 		Combat->OnComboStepStarted.AddDynamic(this, &AIFEnemyController::HandleComboStepStarted);
 	}
 
-	if (const APawn* const ControlledPawn = GetPawn())
+	if (UIFHealthComponent* const Health = ControlledPawn->FindComponentByClass<UIFHealthComponent>())
 	{
-		if (UIFHealthComponent* const Health = ControlledPawn->FindComponentByClass<UIFHealthComponent>())
-		{
-			Health->OnHealthDepleted.AddDynamic(this, &AIFEnemyController::HandleOwnHealthDepleted);
-		}
+		Health->OnHealthDepleted.AddDynamic(this, &AIFEnemyController::HandleOwnHealthDepleted);
 	}
 }
 
@@ -170,7 +192,7 @@ void AIFEnemyController::UnbindPlayerBlockingDelegates()
 	}
 }
 
-EBlackboardNotificationResult AIFEnemyController::HandleTargetBlackboardChanged(const UBlackboardComponent& TargetBlackboard, FBlackboard::FKey KeyID)
+EBlackboardNotificationResult AIFEnemyController::HandleTargetBlackboardChanged(const UBlackboardComponent& TargetBlackboard, FBlackboard::FKey)
 {
 	AActor* const NewTarget = Cast<AActor>(TargetBlackboard.GetValueAsObject(TargetActorKeyName));
 	const bool bTargetingPlayer = NewTarget && CachedWaveManager && NewTarget == CachedWaveManager->GetPlayerActor();
@@ -219,27 +241,18 @@ void AIFEnemyController::HandleComboStepStarted(int32 ComboIndex)
 
 void AIFEnemyController::HandleOwnHealthDepleted()
 {
+	ClearBlockHoldTimer();
+
 	if (UBrainComponent* const Brain = GetBrainComponent())
 	{
+		// StopLogic fires OnCeaseRelevant on BT services, which release engagement slots.
 		Brain->StopLogic(TEXT("Enemy died"));
-	}
-
-	if (CachedWaveManager)
-	{
-		if (const UBlackboardComponent* const BB = GetBlackboardComponent())
-		{
-			AActor* const CurrentTarget = Cast<AActor>(BB->GetValueAsObject(TargetActorKeyName));
-			if (CurrentTarget == CachedWaveManager->GetPlayerActor())
-			{
-				CachedWaveManager->ReleaseEngagementSlot();
-			}
-		}
 	}
 
 	UnbindPlayerBlockingDelegates();
 }
 
-void AIFEnemyController::HandlePlayerCombatStateChanged(ECombatState PreviousState, ECombatState NewState)
+void AIFEnemyController::HandlePlayerCombatStateChanged(ECombatState, ECombatState NewState)
 {
 	if (NewState != ECombatState::Attacking)
 	{
@@ -253,13 +266,19 @@ void AIFEnemyController::HandlePlayerCombatStateChanged(ECombatState PreviousSta
 
 	UIFCombatComponent* const Combat = GetControlledCombatComponent();
 	UWorld* const World = GetWorld();
-	if (!Combat || !World)
+	if (!Combat || !World || !Combat->IsIdle())
 	{
 		return;
 	}
 
 	Combat->StartBlock();
+	if (!Combat->IsBlocking())
+	{
+		return;
+	}
 
+	// Replace any in-flight hold so rapid player attacks cannot stack stop timers.
+	ClearBlockHoldTimer();
 	const float HoldSeconds = FMath::RandRange(MinBlockHoldSeconds, MaxBlockHoldSeconds);
 	World->GetTimerManager().SetTimer(BlockHoldTimerHandle, this, &AIFEnemyController::StopBlockAfterHold, HoldSeconds, false);
 }
@@ -278,15 +297,23 @@ void AIFEnemyController::HandlePlayerDied()
 		return;
 	}
 
-	CachedWaveManager->ReleaseEngagementSlot();
-
-	// Clearing the key aborts active BT tasks before FindTarget re-evaluates on its next tick.
+	// Do not release the engagement slot here. PickInitialTarget owns that so we never double-release.
+	// Clearing the key makes the service pick a new target on its next tick.
 	BB->SetValueAsObject(TargetActorKeyName, nullptr);
+}
+
+void AIFEnemyController::ClearBlockHoldTimer()
+{
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(BlockHoldTimerHandle);
+	}
 }
 
 void AIFEnemyController::StopBlockAfterHold()
 {
-	if (UIFCombatComponent* const Combat = GetControlledCombatComponent())
+	UIFCombatComponent* const Combat = GetControlledCombatComponent();
+	if (Combat && Combat->IsBlocking())
 	{
 		Combat->StopBlock();
 	}
@@ -294,39 +321,8 @@ void AIFEnemyController::StopBlockAfterHold()
 
 void AIFEnemyController::ApplyMovementSpeedForState(ECombatState State)
 {
-	APawn* const ControlledPawn = GetPawn();
-	if (!ControlledPawn)
+	if (AIFEnemyCharacter* const EnemyChar = Cast<AIFEnemyCharacter>(GetPawn()))
 	{
-		return;
+		EnemyChar->ApplyMovementSpeedForState(State);
 	}
-
-	UCharacterMovementComponent* const Movement = ControlledPawn->FindComponentByClass<UCharacterMovementComponent>();
-	if (!Movement)
-	{
-		return;
-	}
-
-	float TargetSpeed = ChaseSpeed;
-
-	switch (State)
-	{
-	case ECombatState::Attacking:
-		TargetSpeed = AttackingSpeed;
-		break;
-
-	case ECombatState::Blocking:
-		TargetSpeed = BlockingSpeed;
-		break;
-
-	case ECombatState::Dead:
-		TargetSpeed = 0.f;
-		break;
-
-	case ECombatState::Idle:
-	default:
-		TargetSpeed = ChaseSpeed;
-		break;
-	}
-
-	Movement->MaxWalkSpeed = TargetSpeed;
 }

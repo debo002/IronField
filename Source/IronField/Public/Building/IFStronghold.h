@@ -37,8 +37,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Stronghold")
 	TObjectPtr<USphereComponent> HitboxComponent;
 
+	// Hitbox is at least this many units larger than the mesh sphere bounds.
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold")
-	float AttackRangeMargin = 150.f;
+	float HitboxMeshPaddingRadius = 150.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Targeting")
 	float AttackAreaRangeMargin = 0.f;

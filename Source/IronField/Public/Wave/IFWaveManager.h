@@ -6,11 +6,9 @@
 #include "IFWaveManager.generated.h"
 
 class AIFPlayerCharacter;
-class AIFStronghold;
 class AIFBaseCharacter;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerDied);
-
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaveStarted, int32, WaveNumber);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaveCompleted, int32, WaveNumber);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemiesAliveCountChanged, int32, NewCount);
@@ -60,11 +58,20 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "WaveManager|Events")
 	FOnAllWavesCompleted OnAllWavesCompleted;
 
+	// Authored sequence for Normal mode only. Unused in Unlimited mode.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WaveManager|Config")
 	TArray<FWaveDefinition> Waves;
 
+	// Single base definition for Unlimited mode. Every wave is this definition scaled by wave index.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WaveManager|Config")
+	FWaveDefinition UnlimitedBaseWave;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WaveManager|Config")
 	bool bAutoStartOnBeginPlay = true;
+
+	// Multiplier applied to UnlimitedBaseWave enemy counts per wave (wave 1 = factor^0, wave 2 = factor^1, ...).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "WaveManager|Config", meta = (ClampMin = "1.0"))
+	float UnlimitedEnemyCountScaleFactor = 1.25f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WaveManager|State")
 	int32 TotalEnemiesInWave = 0;
@@ -72,14 +79,19 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WaveManager|State")
 	int32 EnemiesSpawnedSoFar = 0;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WaveManager|State")
-	int32 CurrentWave = 0;
+	// 1-based wave number for UI. Derived from zero-based CurrentWaveIndex.
+	UFUNCTION(BlueprintPure, Category = "WaveManager|State")
+	int32 GetCurrentWave() const { return CurrentWaveIndex + 1; }
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WaveManager|State")
 	int32 EnemiesAlive = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WaveManager|State")
 	bool bIsWaveActive = false;
+
+	// True between OnWaveCompleted and BeginNextWave — gates a future shop/rest phase.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "WaveManager|State")
+	bool bWaitingForNextWave = false;
 
 	UFUNCTION(BlueprintCallable, Category = "WaveManager|Engagement")
 	bool TryReserveEngagementSlot();
@@ -102,15 +114,18 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "WaveManager|Actions")
 	void StartNextWave();
 
+	// Call after bWaitingForNextWave becomes true (e.g. from shop/rest UI) to start the next wave.
+	UFUNCTION(BlueprintCallable, Category = "WaveManager|Actions")
+	void BeginNextWave();
+
 	UFUNCTION(BlueprintCallable, Category = "WaveManager|Actions")
 	void CleanupWaveCorpses();
 
 	virtual void BeginPlay() override;
-
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "WaveManager|Engagement")
+	UPROPERTY(EditDefaultsOnly, Category = "WaveManager|Engagement", meta = (ClampMin = "0"))
 	int32 MaxPlayerEngagementSlots = 3;
 
 private:
@@ -121,23 +136,22 @@ private:
 	TObjectPtr<AIFPlayerCharacter> CachedPlayer;
 
 	UPROPERTY(Transient)
-	TObjectPtr<AIFStronghold> CachedStronghold;
-
-	UPROPERTY(Transient)
 	TArray<TObjectPtr<AIFBaseCharacter>> SpawnedEnemies;
 
 	int32 CurrentWaveIndex = -1;
 
-	// Negative timestamps keep recency checks false until the player has actually acted.
+	// Negative until the player has attacked / revived at least once, so recency checks stay false.
 	float LastPlayerAttackTime = -1.f;
 	float LastPlayerReviveTime = -1.f;
 
 	void NotifyEnemySpawned(AIFBaseCharacter* Enemy);
-
-	void SpawnEnemyFromWave(const FWaveDefinition& Wave);
+	void SpawnAllEnemiesInWave(const FWaveDefinition& Wave);
+	bool IsUnlimitedRunMode() const;
+	FWaveDefinition BuildUnlimitedWave(int32 WaveIndex) const;
+	void BeginWaveFromDefinition(const FWaveDefinition& Wave);
 
 	UFUNCTION()
-	void HandlePlayerCombatStateChanged(ECombatState PreviousState, ECombatState NewState);
+	void UpdatePlayerActivityTimestamps(ECombatState PreviousState, ECombatState NewState);
 
 	UFUNCTION()
 	void HandlePlayerHealthDepleted();
@@ -148,7 +162,7 @@ private:
 	UFUNCTION()
 	void HandleWaveCompleted(int32 CompletedWaveNumber);
 
-	void CachePlayerAndStronghold();
+	void CachePlayer();
 	void BindPlayerDelegates();
 	void UnbindPlayerDelegates();
 };

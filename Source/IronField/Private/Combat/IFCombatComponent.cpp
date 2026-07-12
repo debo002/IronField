@@ -65,7 +65,7 @@ void UIFCombatComponent::StopBlock()
 		return;
 	}
 
-	// Montage_Stop can synchronously fire its end delegate, so state must change first.
+	// Montage_Stop can fire its end delegate immediately, so leave Blocking before stopping.
 	SetCombatState(ECombatState::Idle);
 
 	UAnimInstance* const AnimInstance = GetAnimInstance();
@@ -89,6 +89,7 @@ void UIFCombatComponent::ResetCombatState()
 	CurrentComboIndex = 0;
 	ResetRegisteredAttackHits();
 	ClearAttackMontageDelegate();
+	ClearReactionMontageDelegates();
 	ActiveAttackMontage = nullptr;
 	ActiveBlockMontage = nullptr;
 	EndAttackCollision();
@@ -293,36 +294,32 @@ bool UIFCombatComponent::CanPlayAttackMontage(int32 ComboIndex) const
 
 bool UIFCombatComponent::TryPlayAttackMontage(int32 ComboIndex)
 {
-	if (!CanPlayAttackMontage(ComboIndex))
-	{
-		return false;
-	}
-
-	if (!StaminaComponent)
+	if (!CanPlayAttackMontage(ComboIndex) || !StaminaComponent)
 	{
 		return false;
 	}
 
 	UAnimInstance* const AnimInstance = GetAnimInstance();
-	const float StaminaCost = GetComboStaminaCost(ComboIndex);
-	ClearAttackMontageDelegate();
-
 	UAnimMontage* const AttackMontage = ComboSteps[ComboIndex].AttackMontage;
+	const float StaminaCost = GetComboStaminaCost(ComboIndex);
 
-	if (!StaminaComponent->TryConsumeStamina(StaminaCost))
-	{
-		return false;
-	}
-
-	ActiveAttackMontage = AttackMontage;
+	// Play first so a bad montage never spends stamina. Cost was already gated by CanPlayAttackMontage.
+	ClearAttackMontageDelegate();
 
 	const float PlayLength = AnimInstance->Montage_Play(AttackMontage);
 	if (PlayLength <= 0.f)
 	{
-		ActiveAttackMontage = nullptr;
 		return false;
 	}
 
+	if (!StaminaComponent->TryConsumeStamina(StaminaCost))
+	{
+		// Race with continuous drain (sprint/block/spin) between the gate check and now.
+		AnimInstance->Montage_Stop(0.f, AttackMontage);
+		return false;
+	}
+
+	ActiveAttackMontage = AttackMontage;
 	CurrentComboIndex = ComboIndex;
 	bComboQueued = false;
 	ResetRegisteredAttackHits();
@@ -377,7 +374,7 @@ bool UIFCombatComponent::TryPlayBlockMontage()
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	if (!AnimInstance || !BlockMontage)
 	{
-		// Missing block animation should not disable the gameplay block.
+		// Still allow blocking without a montage so stamina drain and damage rejection work.
 		ActiveBlockMontage = nullptr;
 		return true;
 	}
@@ -592,10 +589,5 @@ void UIFCombatComponent::SetWeaponCollisionEnabled(bool bEnabled) const
 
 UAnimInstance* UIFCombatComponent::GetAnimInstance() const
 {
-	if (!CachedMesh)
-	{
-		return nullptr;
-	}
-
-	return CachedMesh->GetAnimInstance();
+	return CachedMesh ? CachedMesh->GetAnimInstance() : nullptr;
 }

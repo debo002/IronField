@@ -5,15 +5,16 @@
 #include "Character/IFBaseCharacter.h"
 #include "Wave/IFEnemySpawnPoint.h"
 #include "Combat/IFCombatComponent.h"
+#include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
 #include "Kismet/GameplayStatics.h"
 #include "Stats/IFHealthComponent.h"
 #include "Core/IFStrongholdSubsystem.h"
+#include "Core/IFWaveManagerSubsystem.h"
 
 AIFWaveManager::AIFWaveManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
-	CurrentWaveIndex = -1;
 }
 
 bool AIFWaveManager::TryReserveEngagementSlot()
@@ -53,19 +54,40 @@ void AIFWaveManager::StartNextWave()
 {
 	if (bIsWaveActive)
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Cannot start next wave while wave is already active."));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Cannot start next wave while a wave is already active."));
 		return;
 	}
 
 	CurrentWaveIndex++;
-	CurrentWave = CurrentWaveIndex + 1;
+
+	// Unlimited never touches Waves — every wave is UnlimitedBaseWave scaled by index.
+	if (IsUnlimitedRunMode())
+	{
+		const FWaveDefinition UnlimitedWave = BuildUnlimitedWave(CurrentWaveIndex);
+		BeginWaveFromDefinition(UnlimitedWave);
+		return;
+	}
 
 	if (CurrentWaveIndex >= Waves.Num())
 	{
 		bIsWaveActive = false;
+		bWaitingForNextWave = false;
 		UE_LOG(LogIronField, Log, TEXT("[IF-Wave] All waves completed."));
 		OnAllWavesCompleted.Broadcast();
 		return;
+	}
+
+	BeginWaveFromDefinition(Waves[CurrentWaveIndex]);
+}
+
+void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
+{
+	for (AIFBaseCharacter* Enemy : SpawnedEnemies)
+	{
+		if (Enemy)
+		{
+			Enemy->OnCharacterDied.RemoveAll(this);
+		}
 	}
 
 	EnemiesSpawnedSoFar = 0;
@@ -73,15 +95,36 @@ void AIFWaveManager::StartNextWave()
 	TotalEnemiesInWave = 0;
 	SpawnedEnemies.Empty();
 	bIsWaveActive = true;
+	bWaitingForNextWave = false;
 
-	UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Starting wave %d."), CurrentWave);
-	OnWaveStarted.Broadcast(CurrentWave);
+	const int32 WaveNumber = GetCurrentWave();
+	UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Starting wave %d."), WaveNumber);
+	OnWaveStarted.Broadcast(WaveNumber);
 
-	const FWaveDefinition& Wave = Waves[CurrentWaveIndex];
-	SpawnEnemyFromWave(Wave);
+	SpawnAllEnemiesInWave(Wave);
 }
 
-void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
+bool AIFWaveManager::IsUnlimitedRunMode() const
+{
+	const UIFGameInstance* const GameInstance = Cast<UIFGameInstance>(GetGameInstance());
+	return GameInstance && GameInstance->GetRunMode() == EIFRunMode::Unlimited;
+}
+
+FWaveDefinition AIFWaveManager::BuildUnlimitedWave(int32 WaveIndex) const
+{
+	// WaveIndex is 0-based: wave 1 keeps authored counts, each later wave multiplies again.
+	FWaveDefinition Result = UnlimitedBaseWave;
+	const float Scale = FMath::Pow(UnlimitedEnemyCountScaleFactor, static_cast<float>(WaveIndex));
+
+	for (FEnemyGroupDefinition& Group : Result.EnemyGroups)
+	{
+		Group.EnemyCount = FMath::Max(1, FMath::RoundToInt(static_cast<float>(Group.EnemyCount) * Scale));
+	}
+
+	return Result;
+}
+
+void AIFWaveManager::SpawnAllEnemiesInWave(const FWaveDefinition& Wave)
 {
 	UWorld* const World = GetWorld();
 	if (!World)
@@ -94,7 +137,7 @@ void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
 
 	if (SpawnPointActors.Num() <= 0)
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] No AIFEnemySpawnPoint actors found in the level; spawning at manager location."));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] No AIFEnemySpawnPoint actors found; spawning at manager location."));
 	}
 
 	TotalEnemiesInWave = 0;
@@ -103,15 +146,12 @@ void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
 		TotalEnemiesInWave += Group.EnemyCount;
 	}
 
-	EnemiesSpawnedSoFar = 0;
-	EnemiesAlive = 0;
-
 	for (const FEnemyGroupDefinition& Group : Wave.EnemyGroups)
 	{
 		if (!Group.EnemyClass)
 		{
-			UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Wave %d has an enemy group with no Enemy Class assigned - skipping."), CurrentWave);
-			// Skipped definitions must be removed from the completion target.
+			UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Wave %d has an enemy group with no Enemy Class — skipping."), GetCurrentWave());
+			// Keep the completion target honest when a group cannot spawn.
 			TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - Group.EnemyCount);
 			continue;
 		}
@@ -145,7 +185,6 @@ void AIFWaveManager::SpawnEnemyFromWave(const FWaveDefinition& Wave)
 			}
 			else
 			{
-				// Failed spawns must be removed from the completion target.
 				TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - 1);
 				UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Failed to spawn %s at %s"),
 					*Group.EnemyClass->GetName(), *SpawnLocation.ToString());
@@ -183,8 +222,9 @@ void AIFWaveManager::HandleEnemyDied(AIFBaseCharacter* DeadEnemy)
 	if (EnemiesAlive <= 0 && EnemiesSpawnedSoFar >= TotalEnemiesInWave)
 	{
 		bIsWaveActive = false;
-		UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Wave %d complete."), CurrentWave);
-		OnWaveCompleted.Broadcast(CurrentWave);
+		const int32 WaveNumber = GetCurrentWave();
+		UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Wave %d complete."), WaveNumber);
+		OnWaveCompleted.Broadcast(WaveNumber);
 	}
 }
 
@@ -216,7 +256,15 @@ void AIFWaveManager::BeginPlay()
 {
 	Super::BeginPlay();
 
-	CachePlayerAndStronghold();
+	if (UWorld* const World = GetWorld())
+	{
+		if (UIFWaveManagerSubsystem* const Subsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
+		{
+			Subsystem->RegisterWaveManager(this);
+		}
+	}
+
+	CachePlayer();
 	BindPlayerDelegates();
 
 	OnWaveCompleted.AddDynamic(this, &AIFWaveManager::HandleWaveCompleted);
@@ -229,6 +277,14 @@ void AIFWaveManager::BeginPlay()
 
 void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UWorld* const World = GetWorld())
+	{
+		if (UIFWaveManagerSubsystem* const Subsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
+		{
+			Subsystem->UnregisterWaveManager(this);
+		}
+	}
+
 	OnWaveCompleted.RemoveDynamic(this, &AIFWaveManager::HandleWaveCompleted);
 
 	UnbindPlayerDelegates();
@@ -244,31 +300,36 @@ void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void AIFWaveManager::HandleWaveCompleted(int32 CompletedWaveNumber)
+void AIFWaveManager::HandleWaveCompleted(int32)
 {
+	CleanupWaveCorpses();
+
+	// Shop/rest UI will own this later; for now proceed immediately.
+	bWaitingForNextWave = true;
+	BeginNextWave();
+}
+
+void AIFWaveManager::BeginNextWave()
+{
+	if (!bWaitingForNextWave)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] BeginNextWave called while not waiting for the next wave."));
+		return;
+	}
+
 	StartNextWave();
 }
 
-void AIFWaveManager::CachePlayerAndStronghold()
+void AIFWaveManager::CachePlayer()
 {
 	UWorld* const World = GetWorld();
 	if (!World)
 	{
 		CachedPlayer = nullptr;
-		CachedStronghold = nullptr;
 		return;
 	}
 
 	CachedPlayer = Cast<AIFPlayerCharacter>(UGameplayStatics::GetActorOfClass(World, AIFPlayerCharacter::StaticClass()));
-
-	if (const UIFStrongholdSubsystem* const Subsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
-	{
-		CachedStronghold = Subsystem->GetStronghold();
-	}
-	else
-	{
-		CachedStronghold = nullptr;
-	}
 
 	if (!CachedPlayer)
 	{
@@ -285,7 +346,7 @@ void AIFWaveManager::BindPlayerDelegates()
 
 	if (UIFCombatComponent* const Combat = CachedPlayer->GetCombatComponent())
 	{
-		Combat->OnCombatStateChanged.AddDynamic(this, &AIFWaveManager::HandlePlayerCombatStateChanged);
+		Combat->OnCombatStateChanged.AddDynamic(this, &AIFWaveManager::UpdatePlayerActivityTimestamps);
 	}
 
 	if (UIFHealthComponent* const Health = CachedPlayer->GetHealthComponent())
@@ -312,7 +373,7 @@ void AIFWaveManager::UnbindPlayerDelegates()
 	}
 }
 
-void AIFWaveManager::HandlePlayerCombatStateChanged(ECombatState PreviousState, ECombatState NewState)
+void AIFWaveManager::UpdatePlayerActivityTimestamps(ECombatState PreviousState, ECombatState NewState)
 {
 	const UWorld* const World = GetWorld();
 	if (!World)
