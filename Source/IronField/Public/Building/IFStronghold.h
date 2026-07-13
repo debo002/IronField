@@ -37,15 +37,12 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Stronghold")
 	TObjectPtr<USphereComponent> HitboxComponent;
 
-	// Hitbox is at least this many units larger than the mesh sphere bounds.
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold")
-	float HitboxMeshPaddingRadius = 150.f;
+	// AI engagement distances from origin (independent of hitbox radius).
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Targeting", meta = (ClampMin = "0.0"))
+	float AttackAreaRange = 280.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Targeting")
-	float AttackAreaRangeMargin = 0.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Targeting")
-	float MoveAcceptanceRadiusMargin = -70.f;
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Targeting", meta = (ClampMin = "0.0"))
+	float MoveAcceptanceRadius = 200.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Stronghold")
 	TObjectPtr<UIFHealthComponent> HealthComponent;

@@ -12,6 +12,16 @@ UIFStatBarWidget::UIFStatBarWidget(const FObjectInitializer& ObjectInitializer)
 void UIFStatBarWidget::SetTargetPercent(float NewTargetPercent)
 {
 	TargetPercent = FMath::Clamp(NewTargetPercent, 0.f, 1.f);
+
+	if (!bHasReceivedTarget)
+	{
+		bHasReceivedTarget = true;
+		CurrentPercent = TargetPercent;
+		if (ProgressBar)
+		{
+			ProgressBar->SetPercent(CurrentPercent);
+		}
+	}
 }
 
 void UIFStatBarWidget::NativeConstruct()

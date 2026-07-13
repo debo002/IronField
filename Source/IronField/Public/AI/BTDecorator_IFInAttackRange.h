@@ -18,7 +18,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Targeting")
 	FBlackboardKeySelector TargetActorKey;
 
-	// Fallback range when the target does not implement IIFAttackAreaProvider (e.g. the player).
+	// Fallback when the target is not an IIFAttackAreaProvider (e.g. the player).
 	UPROPERTY(EditAnywhere, Category = "Targeting", meta = (ClampMin = "0.0"))
-	float PlayerAttackRange = 160.f;
+	float PlayerAttackRange = 120.f;
 };

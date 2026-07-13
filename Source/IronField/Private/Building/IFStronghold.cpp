@@ -19,7 +19,7 @@ AIFStronghold::AIFStronghold()
 
 	HitboxComponent = CreateDefaultSubobject<USphereComponent>(TEXT("HitboxComponent"));
 	HitboxComponent->SetupAttachment(RootComponent);
-	HitboxComponent->SetSphereRadius(600.f);
+	HitboxComponent->SetSphereRadius(200.f);
 	// ECC_GameTraceChannel1 is the project "Hittable Objectives" channel (shared with weapon boxes).
 	HitboxComponent->SetCollisionObjectType(ECC_GameTraceChannel1);
 	HitboxComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
@@ -36,17 +36,6 @@ AIFStronghold::AIFStronghold()
 void AIFStronghold::BeginPlay()
 {
 	Super::BeginPlay();
-
-	if (MeshComponent && MeshComponent->GetStaticMesh())
-	{
-		const float MeshWorldRadius = MeshComponent->Bounds.SphereRadius;
-		const float MinRadius = MeshWorldRadius + HitboxMeshPaddingRadius;
-
-		if (HitboxComponent->GetScaledSphereRadius() < MinRadius)
-		{
-			HitboxComponent->SetSphereRadius(MinRadius);
-		}
-	}
 
 	if (HealthComponent)
 	{
@@ -84,17 +73,17 @@ void AIFStronghold::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 float AIFStronghold::GetAttackAreaRange() const
 {
-	return HitboxComponent ? (HitboxComponent->GetScaledSphereRadius() + AttackAreaRangeMargin) : 0.f;
+	return FMath::Max(0.f, AttackAreaRange);
 }
 
 float AIFStronghold::GetAttackAreaAcceptanceRadius() const
 {
-	return HitboxComponent ? FMath::Max(0.f, HitboxComponent->GetScaledSphereRadius() + MoveAcceptanceRadiusMargin) : 0.f;
+	return FMath::Clamp(MoveAcceptanceRadius, 0.f, GetAttackAreaRange());
 }
 
 void AIFStronghold::HandleHealthChanged(float Percent)
 {
-	// Health broadcasts full health on BeginPlay for UI; skip that and the death (0%) case.
+	// Skip BeginPlay full-health broadcast and death (0%).
 	if (Percent <= 0.f || FMath::IsNearlyEqual(Percent, 1.f))
 	{
 		return;

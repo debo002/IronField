@@ -51,7 +51,7 @@ private:
 	float ReviveHealth = 30.f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
-	float CurrentHealth = 0.f;
+	float CurrentHealth = 100.f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
 	bool bIsInvincible = false;

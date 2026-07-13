@@ -39,4 +39,5 @@ protected:
 private:
 	float TargetPercent = 0.f;
 	float CurrentPercent = 0.f;
+	bool bHasReceivedTarget = false;
 };

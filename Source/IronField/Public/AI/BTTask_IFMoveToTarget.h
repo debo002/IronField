@@ -20,5 +20,5 @@ protected:
 	FBlackboardKeySelector TargetActorKey;
 
 	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0.0"))
-	float AcceptanceRadius = 130.f;
+	float AcceptanceRadius = 80.f;
 };

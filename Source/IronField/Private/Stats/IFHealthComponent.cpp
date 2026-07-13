@@ -5,6 +5,7 @@
 UIFHealthComponent::UIFHealthComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	CurrentHealth = MaxHealth;
 }
 
 
