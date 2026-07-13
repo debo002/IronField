@@ -2,6 +2,7 @@
 
 #include "Animation/AnimInstance.h"
 #include "AIController.h"
+#include "Building/IFStronghold.h"
 #include "Character/IFBaseCharacter.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -553,6 +554,16 @@ UIFHealthComponent* UIFCombatComponent::GetValidAttackTargetHealth(AActor* Targe
 		const bool bOwnerIsAI = OwnerPawn->GetController() && OwnerPawn->GetController()->IsA<AAIController>();
 		const bool bTargetIsAI = TargetPawn->GetController() && TargetPawn->GetController()->IsA<AAIController>();
 		if (bOwnerIsAI && bTargetIsAI)
+		{
+			return nullptr;
+		}
+	}
+
+	// The stronghold is the player's own objective to defend - only enemy AI may damage it, never the player.
+	if (Cast<AIFStronghold>(TargetActor))
+	{
+		const bool bOwnerIsAI = OwnerPawn && OwnerPawn->GetController() && OwnerPawn->GetController()->IsA<AAIController>();
+		if (!bOwnerIsAI)
 		{
 			return nullptr;
 		}
