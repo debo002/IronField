@@ -4,7 +4,6 @@
 #include "GameFramework/Character.h"
 #include "IFBaseCharacter.generated.h"
 
-class UBoxComponent;
 class UAnimInstance;
 class UIFCombatComponent;
 class UIFHealthComponent;
@@ -32,9 +31,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Characters|Components")
 	UIFCombatComponent* GetCombatComponent() const { return CombatComponent; }
 
-	UFUNCTION(BlueprintPure, Category = "Characters|Components")
-	UBoxComponent* GetWeaponCollisionBox() const { return WeaponCollisionBox; }
-
 	UFUNCTION(BlueprintPure, Category = "Characters|State")
 	bool IsDead() const;
 
@@ -51,10 +47,6 @@ public:
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Characters|Animation")
 	float DeathMontageBlendOutTime = 0.15f;
-
-	// Skeleton socket the weapon hit box attaches to. Applied in BeginPlay so Blueprint overrides work.
-	UPROPERTY(EditDefaultsOnly, Category = "Characters|Combat")
-	FName WeaponSocketName = TEXT("weapon_r");
 
 	virtual void OnDeathStarted() {}
 
@@ -78,9 +70,6 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Characters|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UIFCombatComponent> CombatComponent;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Characters|Components", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBoxComponent> WeaponCollisionBox;
-
 	UFUNCTION()
 	void HandleStaminaDepleted();
 
@@ -89,5 +78,15 @@ private:
 
 	void BindGameplayDelegates();
 	void UnbindGameplayDelegates();
-	void AttachWeaponCollisionToSocket();
+
+	// Set to true the moment HandleDeath() begins — single re-entrancy guard owned by the character.
+	bool bHasDied = false;
+
+	// Original collision profile names captured in BeginPlay; restored verbatim by RestoreCollisionAfterDeath().
+	FName CapsuleCollisionProfile;
+	FName MeshCollisionProfile;
+
+	// Original rotation settings captured in BeginPlay; restored by RestoreCollisionAfterDeath().
+	bool bSavedOrientRotationToMovement = false;
+	bool bSavedUseControllerDesiredRotation = false;
 };

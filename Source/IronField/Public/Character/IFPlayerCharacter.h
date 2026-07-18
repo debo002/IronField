@@ -3,23 +3,29 @@
 #include "CoreMinimal.h"
 #include "Character/IFBaseCharacter.h"
 #include "Combat/IFCombatTypes.h"
+#include "Combat/IFWeaponBoxOwner.h"
 #include "InputActionValue.h"
 #include "IFPlayerCharacter.generated.h"
 
 class UCameraComponent;
+class UBoxComponent;
 class UEnhancedInputComponent;
 class UInputAction;
 class UInputMappingContext;
 class USpringArmComponent;
+class UStaticMeshComponent;
 class UIFPlayerCombatComponent;
 
 UCLASS()
-class IRONFIELD_API AIFPlayerCharacter : public AIFBaseCharacter
+class IRONFIELD_API AIFPlayerCharacter : public AIFBaseCharacter, public IIFWeaponBoxOwner
 {
 	GENERATED_BODY()
 
 public:
 	AIFPlayerCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+
+	UFUNCTION(BlueprintPure, Category = "Player|Components")
+	virtual UBoxComponent* GetWeaponCollisionBox() const override { return WeaponCollisionBox; }
 
 	UFUNCTION(BlueprintPure, Category = "Player|Movement")
 	bool IsSprinting() const { return bIsSprinting; }
@@ -74,7 +80,7 @@ protected:
 	float BackpedalSpeed = 200.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
-	float BlockSpeed = 250.f;
+	float BlockingSpeed = 250.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Player|Movement")
 	float SprintSpeed = 620.f;
@@ -134,11 +140,20 @@ protected:
 	void OnReviveFinished();
 
 private:
-	UPROPERTY(VisibleAnywhere, Category = "Player|Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USpringArmComponent> CameraBoom;
 
-	UPROPERTY(VisibleAnywhere, Category = "Player|Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCameraComponent> FollowCamera;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Equipment", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UBoxComponent> WeaponCollisionBox;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Equipment", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UStaticMeshComponent> SwordMesh;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Player|Equipment", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UStaticMeshComponent> ShieldMesh;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "Player|Movement", meta = (AllowPrivateAccess = "true"))
 	bool bIsSprinting = false;
@@ -162,6 +177,9 @@ private:
 	void StopBlock();
 	void StartSpinAttack();
 	void StopSpinAttack();
+
+	// Shared gate for attack/block/spin: rejects dead/get-up and cancels sprint first.
+	bool TryPrepareCombatAction();
 
 	UFUNCTION()
 	void HandleCombatStateChanged(ECombatState PreviousState, ECombatState NewState);

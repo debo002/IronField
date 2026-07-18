@@ -1,12 +1,11 @@
 #include "Core/IFMenuPlayerController.h"
 
+#include "Core/IFPlayerControllerUtils.h"
 #include "UI/IFMainMenuWidget.h"
 
 void AIFMenuPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-
-	ApplyMenuInputMode();
 	CreateAndShowMainMenu();
 }
 
@@ -34,18 +33,5 @@ void AIFMenuPlayerController::CreateAndShowMainMenu()
 		return;
 	}
 
-	MainMenuWidget->AddToViewport();
-
-	FInputModeUIOnly InputMode;
-	InputMode.SetWidgetToFocus(MainMenuWidget->TakeWidget());
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	SetInputMode(InputMode);
-}
-
-void AIFMenuPlayerController::ApplyMenuInputMode()
-{
-	FInputModeUIOnly InputMode;
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	SetInputMode(InputMode);
-	bShowMouseCursor = true;
+	IFPlayerControllerUtils::FocusWidgetWithUIOnlyInput(this, MainMenuWidget);
 }

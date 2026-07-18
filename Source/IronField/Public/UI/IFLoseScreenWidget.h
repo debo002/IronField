@@ -25,4 +25,6 @@ protected:
 
 	UFUNCTION()
 	void HandleMainMenuClicked();
+
+	void UnpauseAndOpenLevel(FName LevelName);
 };

@@ -1,22 +1,14 @@
 #include "Combat/IFAnimNotifyStateAttackCollision.h"
 
 #include "Combat/IFCombatComponent.h"
-#include "GameFramework/Actor.h"
-
-namespace
-{
-	UIFCombatComponent* FindOwnerCombat(USkeletalMeshComponent* MeshComp)
-	{
-		const AActor* const Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
-		return Owner ? Owner->FindComponentByClass<UIFCombatComponent>() : nullptr;
-	}
-}
+#include "Combat/IFCombatTargetingUtils.h"
+#include "Components/SkeletalMeshComponent.h"
 
 void UIFAnimNotifyStateAttackCollision::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
 	Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
 
-	if (UIFCombatComponent* const Combat = FindOwnerCombat(MeshComp))
+	if (UIFCombatComponent* const Combat = IFCombatTargetingUtils::FindCombatComponent(MeshComp ? MeshComp->GetOwner() : nullptr))
 	{
 		Combat->BeginAttackCollision();
 	}
@@ -26,7 +18,7 @@ void UIFAnimNotifyStateAttackCollision::NotifyEnd(USkeletalMeshComponent* MeshCo
 {
 	Super::NotifyEnd(MeshComp, Animation, EventReference);
 
-	if (UIFCombatComponent* const Combat = FindOwnerCombat(MeshComp))
+	if (UIFCombatComponent* const Combat = IFCombatTargetingUtils::FindCombatComponent(MeshComp ? MeshComp->GetOwner() : nullptr))
 	{
 		Combat->EndAttackCollision();
 	}

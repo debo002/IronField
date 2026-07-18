@@ -4,8 +4,10 @@
 #include "Character/IFBaseCharacter.h"
 #include "Core/IFLog.h"
 #include "Core/IFStrongholdSubsystem.h"
+#include "Engine/World.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
+#include "TimerManager.h"
 #include "UI/IFStatBarWidget.h"
 
 void UIFHUD::NativeConstruct()
@@ -13,11 +15,21 @@ void UIFHUD::NativeConstruct()
 	Super::NativeConstruct();
 
 	BindPlayerStatBars();
-	BindStrongholdStatBar();
+
+	// Stronghold registers during its own BeginPlay; HUD may construct first from the player controller.
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(this, &UIFHUD::BindStrongholdStatBar));
+	}
 }
 
 void UIFHUD::NativeDestruct()
 {
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().ClearAllTimersForObject(this);
+	}
+
 	UnbindAllSources();
 	Super::NativeDestruct();
 }
@@ -90,7 +102,7 @@ void UIFHUD::BindStrongholdStatBar()
 		return;
 	}
 
-	UIFHealthComponent* const Health = Stronghold->FindComponentByClass<UIFHealthComponent>();
+	UIFHealthComponent* const Health = Stronghold->GetHealthComponent();
 	if (!Health)
 	{
 		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] Stronghold %s has no health component."), *GetNameSafe(Stronghold));
@@ -124,32 +136,25 @@ void UIFHUD::UnbindAllSources()
 	BoundStrongholdHealth = nullptr;
 }
 
+void UIFHUD::SetBarPercent(UIFStatBarWidget* Bar, float Percent)
+{
+	if (Bar)
+	{
+		Bar->SetTargetPercent(Percent);
+	}
+}
+
 void UIFHUD::HandlePlayerHealthChanged(float Percent)
 {
-	if (!PlayerHealthBar)
-	{
-		return;
-	}
-
-	PlayerHealthBar->SetTargetPercent(Percent);
+	SetBarPercent(PlayerHealthBar, Percent);
 }
 
 void UIFHUD::HandlePlayerStaminaChanged(float Percent)
 {
-	if (!PlayerStaminaBar)
-	{
-		return;
-	}
-
-	PlayerStaminaBar->SetTargetPercent(Percent);
+	SetBarPercent(PlayerStaminaBar, Percent);
 }
 
 void UIFHUD::HandleStrongholdHealthChanged(float Percent)
 {
-	if (!StrongholdHealthBar)
-	{
-		return;
-	}
-
-	StrongholdHealthBar->SetTargetPercent(Percent);
+	SetBarPercent(StrongholdHealthBar, Percent);
 }

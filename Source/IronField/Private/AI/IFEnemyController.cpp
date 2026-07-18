@@ -1,5 +1,6 @@
 #include "AI/IFEnemyController.h"
 
+#include "AI/IFEnemyAIData.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BrainComponent.h"
@@ -7,23 +8,12 @@
 #include "Combat/IFCombatComponent.h"
 #include "Core/IFLog.h"
 #include "Core/IFWaveManagerSubsystem.h"
-#include "GameFramework/Pawn.h"
 #include "Stats/IFHealthComponent.h"
-#include "TimerManager.h"
 #include "Wave/IFWaveManager.h"
 
-namespace
+const UIFEnemyAIData* AIFEnemyController::GetAIData() const
 {
-	static const FName TargetActorKeyName(TEXT("TargetActor"));
-}
-
-AIFEnemyController::AIFEnemyController()
-{
-}
-
-UIFCombatComponent* AIFEnemyController::GetControlledCombatComponent() const
-{
-	return CachedCombatComponent;
+	return AIData ? AIData.Get() : GetDefault<UIFEnemyAIData>();
 }
 
 bool AIFEnemyController::IsReadyForNewAttack() const
@@ -54,13 +44,14 @@ void AIFEnemyController::OnPossess(APawn* InPawn)
 
 void AIFEnemyController::InitializeAfterPossession()
 {
+	if (!AIData)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s has no AIData assigned — using UIFEnemyAIData CDO defaults."), *GetName());
+	}
+
 	if (BehaviorTreeAsset)
 	{
 		RunBehaviorTree(BehaviorTreeAsset);
-	}
-	else
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: BehaviorTreeAsset is not set."), *GetName());
 	}
 
 	if (const UWorld* const World = GetWorld())
@@ -75,57 +66,15 @@ void AIFEnemyController::InitializeAfterPossession()
 	{
 		CachedWaveManager->OnPlayerDied.AddDynamic(this, &AIFEnemyController::HandlePlayerDied);
 	}
-	else
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: no AIFWaveManager found in the level."), *GetName());
-	}
-
-	if (UBlackboardComponent* const BB = GetBlackboardComponent())
-	{
-		const FBlackboard::FKey TargetKeyID = BB->GetKeyID(TargetActorKeyName);
-		if (TargetKeyID == FBlackboard::InvalidKey)
-		{
-			UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: Blackboard has no key named 'TargetActor'."), *GetName());
-		}
-		else
-		{
-			TargetObserverHandle = BB->RegisterObserver(
-				TargetKeyID,
-				this,
-				FOnBlackboardChangeNotification::CreateUObject(this, &AIFEnemyController::HandleTargetBlackboardChanged));
-
-			HandleTargetBlackboardChanged(*BB, TargetKeyID);
-		}
-	}
-	else
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s: no BlackboardComponent after RunBehaviorTree."), *GetName());
-	}
 
 	BindOwnDelegates();
 }
 
 void AIFEnemyController::OnUnPossess()
 {
-	ClearBlockHoldTimer();
-
-	if (UBlackboardComponent* const BB = GetBlackboardComponent())
-	{
-		if (TargetObserverHandle.IsValid())
-		{
-			const FBlackboard::FKey TargetKeyID = BB->GetKeyID(TargetActorKeyName);
-			if (TargetKeyID != FBlackboard::InvalidKey)
-			{
-				BB->UnregisterObserver(TargetKeyID, TargetObserverHandle);
-			}
-			TargetObserverHandle.Reset();
-		}
-	}
-
 	UnbindOwnDelegates();
 	CachedCombatComponent = nullptr;
 	CachedWaveManager = nullptr;
-
 	Super::OnUnPossess();
 }
 
@@ -141,7 +90,6 @@ void AIFEnemyController::BindOwnDelegates()
 	if (UIFCombatComponent* const Combat = CachedCombatComponent)
 	{
 		Combat->OnCombatStateChanged.AddDynamic(this, &AIFEnemyController::HandleOwnCombatStateChanged);
-		Combat->OnComboStepStarted.AddDynamic(this, &AIFEnemyController::HandleComboStepStarted);
 	}
 
 	if (UIFHealthComponent* const Health = ControlledPawn->FindComponentByClass<UIFHealthComponent>())
@@ -155,7 +103,6 @@ void AIFEnemyController::UnbindOwnDelegates()
 	if (UIFCombatComponent* const Combat = GetControlledCombatComponent())
 	{
 		Combat->OnCombatStateChanged.RemoveAll(this);
-		Combat->OnComboStepStarted.RemoveAll(this);
 	}
 
 	if (const APawn* const ControlledPawn = GetPawn())
@@ -166,47 +113,10 @@ void AIFEnemyController::UnbindOwnDelegates()
 		}
 	}
 
-	UnbindPlayerBlockingDelegates();
-
 	if (CachedWaveManager)
 	{
 		CachedWaveManager->OnPlayerDied.RemoveAll(this);
 	}
-}
-
-void AIFEnemyController::BindPlayerBlockingDelegates()
-{
-	AActor* const PlayerActor = CachedWaveManager ? CachedWaveManager->GetPlayerActor() : nullptr;
-	if (UIFCombatComponent* const PlayerCombat = PlayerActor ? PlayerActor->FindComponentByClass<UIFCombatComponent>() : nullptr)
-	{
-		PlayerCombat->OnCombatStateChanged.AddUniqueDynamic(this, &AIFEnemyController::HandlePlayerCombatStateChanged);
-	}
-}
-
-void AIFEnemyController::UnbindPlayerBlockingDelegates()
-{
-	AActor* const PlayerActor = CachedWaveManager ? CachedWaveManager->GetPlayerActor() : nullptr;
-	if (UIFCombatComponent* const PlayerCombat = PlayerActor ? PlayerActor->FindComponentByClass<UIFCombatComponent>() : nullptr)
-	{
-		PlayerCombat->OnCombatStateChanged.RemoveDynamic(this, &AIFEnemyController::HandlePlayerCombatStateChanged);
-	}
-}
-
-EBlackboardNotificationResult AIFEnemyController::HandleTargetBlackboardChanged(const UBlackboardComponent& TargetBlackboard, FBlackboard::FKey)
-{
-	AActor* const NewTarget = Cast<AActor>(TargetBlackboard.GetValueAsObject(TargetActorKeyName));
-	const bool bTargetingPlayer = NewTarget && CachedWaveManager && NewTarget == CachedWaveManager->GetPlayerActor();
-
-	if (bTargetingPlayer)
-	{
-		BindPlayerBlockingDelegates();
-	}
-	else
-	{
-		UnbindPlayerBlockingDelegates();
-	}
-
-	return EBlackboardNotificationResult::ContinueObserving;
 }
 
 void AIFEnemyController::HandleOwnCombatStateChanged(ECombatState PreviousState, ECombatState NewState)
@@ -216,71 +126,28 @@ void AIFEnemyController::HandleOwnCombatStateChanged(ECombatState PreviousState,
 		if (const UWorld* const World = GetWorld())
 		{
 			LastAttackEndedTime = World->GetTimeSeconds();
-			CurrentReattackCooldownSeconds = FMath::RandRange(MinReattackCooldownSeconds, MaxReattackCooldownSeconds);
+			const UIFEnemyAIData* const Data = GetAIData();
+			CurrentReattackCooldownSeconds = FMath::RandRange(Data->MinReattackCooldownSeconds, Data->MaxReattackCooldownSeconds);
 		}
 	}
 
 	ApplyMovementSpeedForState(NewState);
 }
 
-void AIFEnemyController::HandleComboStepStarted(int32 ComboIndex)
-{
-	UIFCombatComponent* const Combat = GetControlledCombatComponent();
-	if (!Combat)
-	{
-		return;
-	}
-
-	if (FMath::FRand() >= Combat->GetComboContinueChance(ComboIndex))
-	{
-		return;
-	}
-
-	Combat->StartAttack();
-}
-
 void AIFEnemyController::HandleOwnHealthDepleted()
 {
-	ClearBlockHoldTimer();
+	ClearFocus(EAIFocusPriority::Gameplay);
+	ClearFocus(EAIFocusPriority::Default);
 
 	if (UBrainComponent* const Brain = GetBrainComponent())
 	{
-		// StopLogic fires OnCeaseRelevant on BT services, which release engagement slots.
 		Brain->StopLogic(TEXT("Enemy died"));
 	}
 
-	UnbindPlayerBlockingDelegates();
-}
-
-void AIFEnemyController::HandlePlayerCombatStateChanged(ECombatState, ECombatState NewState)
-{
-	if (NewState != ECombatState::Attacking)
+	if (APawn* const ControlledPawn = GetPawn())
 	{
-		return;
+		ControlledPawn->DetachFromControllerPendingDestroy();
 	}
-
-	if (FMath::FRand() >= BlockReactionChance)
-	{
-		return;
-	}
-
-	UIFCombatComponent* const Combat = GetControlledCombatComponent();
-	UWorld* const World = GetWorld();
-	if (!Combat || !World || !Combat->IsIdle())
-	{
-		return;
-	}
-
-	Combat->StartBlock();
-	if (!Combat->IsBlocking())
-	{
-		return;
-	}
-
-	// Replace any in-flight hold so rapid player attacks cannot stack stop timers.
-	ClearBlockHoldTimer();
-	const float HoldSeconds = FMath::RandRange(MinBlockHoldSeconds, MaxBlockHoldSeconds);
-	World->GetTimerManager().SetTimer(BlockHoldTimerHandle, this, &AIFEnemyController::StopBlockAfterHold, HoldSeconds, false);
 }
 
 void AIFEnemyController::HandlePlayerDied()
@@ -291,31 +158,9 @@ void AIFEnemyController::HandlePlayerDied()
 		return;
 	}
 
-	AActor* const CurrentTarget = Cast<AActor>(BB->GetValueAsObject(TargetActorKeyName));
-	if (CurrentTarget != CachedWaveManager->GetPlayerActor())
+	if (Cast<AActor>(BB->GetValueAsObject(TargetActorKeyName)) == CachedWaveManager->GetPlayerActor())
 	{
-		return;
-	}
-
-	// Do not release the engagement slot here. PickInitialTarget owns that so we never double-release.
-	// Clearing the key makes the service pick a new target on its next tick.
-	BB->SetValueAsObject(TargetActorKeyName, nullptr);
-}
-
-void AIFEnemyController::ClearBlockHoldTimer()
-{
-	if (UWorld* const World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(BlockHoldTimerHandle);
-	}
-}
-
-void AIFEnemyController::StopBlockAfterHold()
-{
-	UIFCombatComponent* const Combat = GetControlledCombatComponent();
-	if (Combat && Combat->IsBlocking())
-	{
-		Combat->StopBlock();
+		BB->SetValueAsObject(TargetActorKeyName, nullptr);
 	}
 }
 

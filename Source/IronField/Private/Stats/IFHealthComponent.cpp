@@ -8,7 +8,6 @@ UIFHealthComponent::UIFHealthComponent()
 	CurrentHealth = MaxHealth;
 }
 
-
 void UIFHealthComponent::ApplyDamage(float Amount)
 {
 	if (bIsDead || bIsInvincible || Amount <= 0.f)
@@ -37,17 +36,9 @@ void UIFHealthComponent::ApplyHealing(float Amount)
 
 void UIFHealthComponent::Revive()
 {
-	CurrentHealth = FMath::Clamp(ReviveHealth, 1.f, MaxHealth);
 	bIsDead = false;
-	OnHealthChanged.Broadcast(GetHealthPercent());
+	SetHealthClamped(FMath::Clamp(ReviveHealth, 1.f, MaxHealth));
 }
-
-
-float UIFHealthComponent::GetHealthPercent() const
-{
-	return MaxHealth > 0.f ? CurrentHealth / MaxHealth : 0.f;
-}
-
 
 void UIFHealthComponent::BeginPlay()
 {
@@ -67,14 +58,13 @@ void UIFHealthComponent::BeginPlay()
 
 void UIFHealthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::EndPlay(EndPlayReason);
-
 	if (AActor* const Owner = GetOwner())
 	{
 		Owner->OnTakeAnyDamage.RemoveAll(this);
 	}
-}
 
+	Super::EndPlay(EndPlayReason);
+}
 
 void UIFHealthComponent::HandleOwnerTakeAnyDamage(AActor*, float Damage, const UDamageType*, AController*, AActor*)
 {
@@ -83,14 +73,7 @@ void UIFHealthComponent::HandleOwnerTakeAnyDamage(AActor*, float Damage, const U
 
 void UIFHealthComponent::SetHealthClamped(float NewHealth)
 {
-	const float PreviousHealth = CurrentHealth;
-	CurrentHealth = FMath::Clamp(NewHealth, 0.f, MaxHealth);
-	BroadcastHealthChangedIfNeeded(PreviousHealth);
-}
-
-void UIFHealthComponent::BroadcastHealthChangedIfNeeded(float PreviousHealth)
-{
-	if (!FMath::IsNearlyEqual(CurrentHealth, PreviousHealth))
+	if (ApplyClampedValue(CurrentHealth, MaxHealth, NewHealth))
 	{
 		OnHealthChanged.Broadcast(GetHealthPercent());
 	}

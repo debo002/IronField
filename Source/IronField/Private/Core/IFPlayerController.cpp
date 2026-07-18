@@ -1,7 +1,8 @@
 #include "Core/IFPlayerController.h"
 
-#include "Blueprint/UserWidget.h"
+#include "Core/IFPlayerControllerUtils.h"
 #include "Kismet/GameplayStatics.h"
+#include "UI/IFHUD.h"
 #include "UI/IFLoseScreenWidget.h"
 
 void AIFPlayerController::BeginPlay()
@@ -36,7 +37,7 @@ void AIFPlayerController::CreateAndShowHUD()
 		return;
 	}
 
-	HUDWidget = CreateWidget<UUserWidget>(this, HUDWidgetClass);
+	HUDWidget = CreateWidget<UIFHUD>(this, HUDWidgetClass);
 	if (HUDWidget)
 	{
 		HUDWidget->AddToViewport();
@@ -64,13 +65,7 @@ void AIFPlayerController::ShowLoseScreen()
 		return;
 	}
 
-	LoseScreenWidget->AddToViewport();
-
-	FInputModeUIOnly InputMode;
-	InputMode.SetWidgetToFocus(LoseScreenWidget->TakeWidget());
-	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
-	SetInputMode(InputMode);
-	bShowMouseCursor = true;
+	IFPlayerControllerUtils::FocusWidgetWithUIOnlyInput(this, LoseScreenWidget);
 
 	if (LoseStinger)
 	{

@@ -1,36 +1,21 @@
 #include "Wave/IFWaveManager.h"
 
 #include "Building/IFStronghold.h"
-#include "Character/IFPlayerCharacter.h"
 #include "Character/IFBaseCharacter.h"
-#include "Wave/IFEnemySpawnPoint.h"
-#include "Combat/IFCombatComponent.h"
+#include "Character/IFPlayerCharacter.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
-#include "Kismet/GameplayStatics.h"
-#include "Stats/IFHealthComponent.h"
+#include "Core/IFPlayerSubsystem.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Core/IFWaveManagerSubsystem.h"
+#include "Kismet/GameplayStatics.h"
+#include "Stats/IFHealthComponent.h"
+#include "TimerManager.h"
+#include "Wave/IFEnemySpawnPoint.h"
 
 AIFWaveManager::AIFWaveManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
-}
-
-bool AIFWaveManager::TryReserveEngagementSlot()
-{
-	if (CurrentPlayerEngagementCount >= MaxPlayerEngagementSlots)
-	{
-		return false;
-	}
-
-	++CurrentPlayerEngagementCount;
-	return true;
-}
-
-void AIFWaveManager::ReleaseEngagementSlot()
-{
-	CurrentPlayerEngagementCount = FMath::Max(0, CurrentPlayerEngagementCount - 1);
 }
 
 AActor* AIFWaveManager::GetPlayerActor() const
@@ -82,13 +67,7 @@ void AIFWaveManager::StartNextWave()
 
 void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
 {
-	for (AIFBaseCharacter* Enemy : SpawnedEnemies)
-	{
-		if (Enemy)
-		{
-			Enemy->OnCharacterDied.RemoveAll(this);
-		}
-	}
+	UnbindAllSpawnedEnemyDelegates();
 
 	EnemiesSpawnedSoFar = 0;
 	EnemiesAlive = 0;
@@ -102,6 +81,7 @@ void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
 	OnWaveStarted.Broadcast(WaveNumber);
 
 	SpawnAllEnemiesInWave(Wave);
+	CompleteWaveIfFinished();
 }
 
 bool AIFWaveManager::IsUnlimitedRunMode() const
@@ -171,8 +151,11 @@ void AIFWaveManager::SpawnAllEnemiesInWave(const FWaveDefinition& Wave)
 				}
 			}
 
-			SpawnLocation.X += FMath::RandRange(-40.f, 40.f);
-			SpawnLocation.Y += FMath::RandRange(-40.f, 40.f);
+			if (SpawnLocationJitterRadius > 0.f)
+			{
+				SpawnLocation.X += FMath::RandRange(-SpawnLocationJitterRadius, SpawnLocationJitterRadius);
+				SpawnLocation.Y += FMath::RandRange(-SpawnLocationJitterRadius, SpawnLocationJitterRadius);
+			}
 
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -200,11 +183,30 @@ void AIFWaveManager::NotifyEnemySpawned(AIFBaseCharacter* Enemy)
 		return;
 	}
 
-	SpawnedEnemies.AddUnique(Enemy);
+	SpawnedEnemies.Add(Enemy);
 	EnemiesAlive++;
 	OnEnemiesAliveCountChanged.Broadcast(EnemiesAlive);
 
 	Enemy->OnCharacterDied.AddDynamic(this, &AIFWaveManager::HandleEnemyDied);
+}
+
+void AIFWaveManager::CompleteWaveIfFinished()
+{
+	if (!bIsWaveActive || EnemiesAlive > 0 || EnemiesSpawnedSoFar < TotalEnemiesInWave)
+	{
+		return;
+	}
+
+	// Empty/all-invalid waves never spawn, so HandleEnemyDied never runs — complete here instead.
+	if (TotalEnemiesInWave <= 0)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Wave %d has no spawnable enemies; completing immediately."), GetCurrentWave());
+	}
+
+	bIsWaveActive = false;
+	const int32 WaveNumber = GetCurrentWave();
+	UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Wave %d complete."), WaveNumber);
+	OnWaveCompleted.Broadcast(WaveNumber);
 }
 
 void AIFWaveManager::HandleEnemyDied(AIFBaseCharacter* DeadEnemy)
@@ -219,37 +221,37 @@ void AIFWaveManager::HandleEnemyDied(AIFBaseCharacter* DeadEnemy)
 	EnemiesAlive = FMath::Max(0, EnemiesAlive - 1);
 	OnEnemiesAliveCountChanged.Broadcast(EnemiesAlive);
 
-	if (EnemiesAlive <= 0 && EnemiesSpawnedSoFar >= TotalEnemiesInWave)
-	{
-		bIsWaveActive = false;
-		const int32 WaveNumber = GetCurrentWave();
-		UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Wave %d complete."), WaveNumber);
-		OnWaveCompleted.Broadcast(WaveNumber);
-	}
+	CompleteWaveIfFinished();
 }
 
 void AIFWaveManager::CleanupWaveCorpses()
 {
-	TArray<TObjectPtr<AIFBaseCharacter>> RemainingEnemies;
-
-	for (AIFBaseCharacter* Enemy : SpawnedEnemies)
+	for (int32 Index = SpawnedEnemies.Num() - 1; Index >= 0; --Index)
 	{
+		AIFBaseCharacter* const Enemy = SpawnedEnemies[Index];
 		if (!Enemy)
 		{
+			SpawnedEnemies.RemoveAt(Index);
 			continue;
 		}
 
 		if (Enemy->IsDead())
 		{
 			Enemy->Destroy();
-		}
-		else
-		{
-			RemainingEnemies.Add(Enemy);
+			SpawnedEnemies.RemoveAt(Index);
 		}
 	}
+}
 
-	SpawnedEnemies = RemainingEnemies;
+void AIFWaveManager::UnbindAllSpawnedEnemyDelegates()
+{
+	for (AIFBaseCharacter* Enemy : SpawnedEnemies)
+	{
+		if (Enemy)
+		{
+			Enemy->OnCharacterDied.RemoveDynamic(this, &AIFWaveManager::HandleEnemyDied);
+		}
+	}
 }
 
 void AIFWaveManager::BeginPlay()
@@ -262,10 +264,10 @@ void AIFWaveManager::BeginPlay()
 		{
 			Subsystem->RegisterWaveManager(this);
 		}
-	}
 
-	CachePlayer();
-	BindPlayerDelegates();
+		// Player registers during its own BeginPlay; defer so possession/registration is ready.
+		World->GetTimerManager().SetTimerForNextTick(this, &AIFWaveManager::InitializePlayerBindings);
+	}
 
 	OnWaveCompleted.AddDynamic(this, &AIFWaveManager::HandleWaveCompleted);
 
@@ -279,6 +281,8 @@ void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (UWorld* const World = GetWorld())
 	{
+		World->GetTimerManager().ClearAllTimersForObject(this);
+
 		if (UIFWaveManagerSubsystem* const Subsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
 		{
 			Subsystem->UnregisterWaveManager(this);
@@ -288,14 +292,7 @@ void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	OnWaveCompleted.RemoveDynamic(this, &AIFWaveManager::HandleWaveCompleted);
 
 	UnbindPlayerDelegates();
-
-	for (AIFBaseCharacter* Enemy : SpawnedEnemies)
-	{
-		if (Enemy)
-		{
-			Enemy->OnCharacterDied.RemoveAll(this);
-		}
-	}
+	UnbindAllSpawnedEnemyDelegates();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -320,20 +317,27 @@ void AIFWaveManager::BeginNextWave()
 	StartNextWave();
 }
 
+void AIFWaveManager::InitializePlayerBindings()
+{
+	CachePlayer();
+	BindPlayerDelegates();
+}
+
 void AIFWaveManager::CachePlayer()
 {
-	UWorld* const World = GetWorld();
-	if (!World)
-	{
-		CachedPlayer = nullptr;
-		return;
-	}
+	CachedPlayer = nullptr;
 
-	CachedPlayer = Cast<AIFPlayerCharacter>(UGameplayStatics::GetActorOfClass(World, AIFPlayerCharacter::StaticClass()));
+	if (const UWorld* const World = GetWorld())
+	{
+		if (const UIFPlayerSubsystem* const Subsystem = World->GetSubsystem<UIFPlayerSubsystem>())
+		{
+			CachedPlayer = Subsystem->GetPlayer();
+		}
+	}
 
 	if (!CachedPlayer)
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] No AIFPlayerCharacter found in the level."));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] No AIFPlayerCharacter registered with UIFPlayerSubsystem."));
 	}
 }
 
@@ -342,11 +346,6 @@ void AIFWaveManager::BindPlayerDelegates()
 	if (!CachedPlayer)
 	{
 		return;
-	}
-
-	if (UIFCombatComponent* const Combat = CachedPlayer->GetCombatComponent())
-	{
-		Combat->OnCombatStateChanged.AddDynamic(this, &AIFWaveManager::UpdatePlayerActivityTimestamps);
 	}
 
 	if (UIFHealthComponent* const Health = CachedPlayer->GetHealthComponent())
@@ -362,34 +361,9 @@ void AIFWaveManager::UnbindPlayerDelegates()
 		return;
 	}
 
-	if (UIFCombatComponent* const Combat = CachedPlayer->GetCombatComponent())
-	{
-		Combat->OnCombatStateChanged.RemoveAll(this);
-	}
-
 	if (UIFHealthComponent* const Health = CachedPlayer->GetHealthComponent())
 	{
-		Health->OnHealthDepleted.RemoveAll(this);
-	}
-}
-
-void AIFWaveManager::UpdatePlayerActivityTimestamps(ECombatState PreviousState, ECombatState NewState)
-{
-	const UWorld* const World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	const float Now = World->GetTimeSeconds();
-
-	if (NewState == ECombatState::Attacking)
-	{
-		LastPlayerAttackTime = Now;
-	}
-	else if (PreviousState == ECombatState::Dead && NewState == ECombatState::Idle)
-	{
-		LastPlayerReviveTime = Now;
+		Health->OnHealthDepleted.RemoveDynamic(this, &AIFWaveManager::HandlePlayerHealthDepleted);
 	}
 }
 

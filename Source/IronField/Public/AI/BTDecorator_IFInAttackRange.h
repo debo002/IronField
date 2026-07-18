@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTDecorator.h"
+#include "BehaviorTree/BehaviorTreeTypes.h"
 #include "BTDecorator_IFInAttackRange.generated.h"
 
 UCLASS()
@@ -13,12 +14,10 @@ public:
 	UBTDecorator_IFInAttackRange();
 
 protected:
+	virtual uint16 GetInstanceMemorySize() const override;
+	virtual void TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 	virtual bool CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const override;
 
 	UPROPERTY(EditAnywhere, Category = "Targeting")
 	FBlackboardKeySelector TargetActorKey;
-
-	// Fallback when the target is not an IIFAttackAreaProvider (e.g. the player).
-	UPROPERTY(EditAnywhere, Category = "Targeting", meta = (ClampMin = "0.0"))
-	float PlayerAttackRange = 120.f;
 };

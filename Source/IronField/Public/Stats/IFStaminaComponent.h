@@ -2,11 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Combat/IFCombatTypes.h"
-#include "Components/ActorComponent.h"
+#include "Stats/IFStatComponent.h"
 #include "IFStaminaComponent.generated.h"
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class IRONFIELD_API UIFStaminaComponent : public UActorComponent
+class IRONFIELD_API UIFStaminaComponent : public UIFStatComponent
 {
 	GENERATED_BODY()
 
@@ -29,7 +29,7 @@ public:
 	void StopContinuousDrain();
 
 	UFUNCTION(BlueprintPure, Category = "Stamina|State")
-	float GetStaminaPercent() const;
+	float GetStaminaPercent() const { return ComputePercent(CurrentStamina, MaxStamina); }
 
 	UFUNCTION(BlueprintPure, Category = "Stamina|State")
 	bool HasStamina(float MinimumAmount) const { return CurrentStamina >= MinimumAmount; }
@@ -63,6 +63,5 @@ private:
 	void UpdateTickEnabled();
 
 	void SetStaminaClamped(float NewStamina);
-	void BroadcastStaminaChangedIfNeeded(float PreviousStamina);
 	void BroadcastStaminaDepletedIfNeeded(float PreviousStamina);
 };

@@ -18,14 +18,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|Actions")
 	void StopSpinAttack();
 
+	virtual void StartAttack() override;
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
 	virtual void ResetCombatState() override;
-
-	virtual bool CanQueueComboAttack() const override { return !bIsSpinning && Super::CanQueueComboAttack(); }
-
+	virtual bool CanQueueComboAttack() const override;
 	virtual float GetCurrentAttackDamage() const override;
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override;
 
@@ -66,7 +65,7 @@ private:
 	UFUNCTION()
 	void HandleStaminaDepleted();
 
+	void ClearSpinState();
 	void StopSpinGracefully();
-
 	void StopSpinImmediately();
 };

@@ -43,6 +43,7 @@ private:
 	void BindPlayerStatBars();
 	void BindStrongholdStatBar();
 	void UnbindAllSources();
+	void SetBarPercent(UIFStatBarWidget* Bar, float Percent);
 
 	TWeakObjectPtr<UIFHealthComponent> BoundPlayerHealth;
 	TWeakObjectPtr<UIFStaminaComponent> BoundPlayerStamina;

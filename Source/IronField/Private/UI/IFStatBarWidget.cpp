@@ -46,7 +46,6 @@ void UIFStatBarWidget::NativeTick(const FGeometry& MyGeometry, float InDeltaTime
 		return;
 	}
 
-	// Same formula as WBP_HUD InterpAndSetBarPercent: FInterpTo(Current, Target, DeltaTime, InterpSpeed).
 	CurrentPercent = FMath::FInterpTo(CurrentPercent, TargetPercent, InDeltaTime, InterpSpeed);
 	ProgressBar->SetPercent(CurrentPercent);
 }

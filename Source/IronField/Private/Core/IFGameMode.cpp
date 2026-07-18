@@ -74,7 +74,7 @@ void AIFGameMode::UnbindGameFlowDelegates()
 	{
 		if (AIFWaveManager* const WaveManager = WaveSubsystem->GetWaveManager())
 		{
-			WaveManager->OnAllWavesCompleted.RemoveAll(this);
+			WaveManager->OnAllWavesCompleted.RemoveDynamic(this, &AIFGameMode::HandleAllWavesCompleted);
 		}
 	}
 
@@ -82,7 +82,7 @@ void AIFGameMode::UnbindGameFlowDelegates()
 	{
 		if (AIFStronghold* const Stronghold = StrongholdSubsystem->GetStronghold())
 		{
-			Stronghold->OnStrongholdDestroyed.RemoveAll(this);
+			Stronghold->OnStrongholdDestroyed.RemoveDynamic(this, &AIFGameMode::HandleStrongholdDestroyed);
 		}
 	}
 }

@@ -1,6 +1,7 @@
 #include "UI/IFMainMenuWidget.h"
 
 #include "Components/Button.h"
+#include "Core/IFGameInstance.h"
 #include "Kismet/GameplayStatics.h"
 
 void UIFMainMenuWidget::NativeConstruct()

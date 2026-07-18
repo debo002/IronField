@@ -13,10 +13,9 @@ class IRONFIELD_API UIFWaveManagerSubsystem : public UWorldSubsystem
 
 public:
 	void RegisterWaveManager(AIFWaveManager* InWaveManager);
-
 	void UnregisterWaveManager(AIFWaveManager* InWaveManager);
 
-	UFUNCTION(BlueprintPure, Category = "WaveManager")
+	UFUNCTION(BlueprintPure, Category = "IronField|Wave")
 	AIFWaveManager* GetWaveManager() const;
 
 private:

@@ -1,8 +1,12 @@
 #include "Character/IFPlayerCharacter.h"
 
 #include "Camera/CameraComponent.h"
+#include "Character/IFCharacterSetupUtils.h"
 #include "Combat/IFCombatComponent.h"
 #include "Combat/IFPlayerCombatComponent.h"
+#include "Components/BoxComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Core/IFPlayerSubsystem.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
 #include "EnhancedInputComponent.h"
@@ -37,6 +41,15 @@ AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializ
 
 	bUseControllerRotationYaw = true;
 	GetCharacterMovement()->bOrientRotationToMovement = false;
+
+	WeaponCollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollision"));
+	IFCharacterSetupUtils::ConfigureWeaponCollisionBox(WeaponCollisionBox, GetMesh());
+
+	SwordMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Sword"));
+	IFCharacterSetupUtils::ConfigureCosmeticEquipmentMesh(SwordMesh, GetMesh(), TEXT("weapon_r"));
+
+	ShieldMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Shield"));
+	IFCharacterSetupUtils::ConfigureCosmeticEquipmentMesh(ShieldMesh, GetMesh(), TEXT("weapon_l"));
 }
 
 float AIFPlayerCharacter::GetHealthPercent() const
@@ -54,6 +67,14 @@ float AIFPlayerCharacter::GetStaminaPercent() const
 void AIFPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (UWorld* const World = GetWorld())
+	{
+		if (UIFPlayerSubsystem* const Subsystem = World->GetSubsystem<UIFPlayerSubsystem>())
+		{
+			Subsystem->RegisterPlayer(this);
+		}
+	}
 
 	if (UIFCombatComponent* const Combat = GetCombatComponent())
 	{
@@ -77,15 +98,23 @@ void AIFPlayerCharacter::Tick(float DeltaTime)
 
 void AIFPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::EndPlay(EndPlayReason);
-
 	ClearReviveTimers();
 	StopSprint();
 
 	if (UIFCombatComponent* const Combat = GetCombatComponent())
 	{
-		Combat->OnCombatStateChanged.RemoveAll(this);
+		Combat->OnCombatStateChanged.RemoveDynamic(this, &AIFPlayerCharacter::HandleCombatStateChanged);
 	}
+
+	if (UWorld* const World = GetWorld())
+	{
+		if (UIFPlayerSubsystem* const Subsystem = World->GetSubsystem<UIFPlayerSubsystem>())
+		{
+			Subsystem->UnregisterPlayer(this);
+		}
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 void AIFPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -363,14 +392,23 @@ void AIFPlayerCharacter::StopSprint()
 	UpdateMovementSpeed();
 }
 
-void AIFPlayerCharacter::Attack()
+bool AIFPlayerCharacter::TryPrepareCombatAction()
 {
 	if (IsDead() || IsGettingUp())
 	{
-		return;
+		return false;
 	}
 
 	StopSprint();
+	return true;
+}
+
+void AIFPlayerCharacter::Attack()
+{
+	if (!TryPrepareCombatAction())
+	{
+		return;
+	}
 
 	if (UIFCombatComponent* const Combat = GetCombatComponent())
 	{
@@ -380,12 +418,10 @@ void AIFPlayerCharacter::Attack()
 
 void AIFPlayerCharacter::StartBlock()
 {
-	if (IsDead() || IsGettingUp())
+	if (!TryPrepareCombatAction())
 	{
 		return;
 	}
-
-	StopSprint();
 
 	if (UIFCombatComponent* const Combat = GetCombatComponent())
 	{
@@ -403,12 +439,10 @@ void AIFPlayerCharacter::StopBlock()
 
 void AIFPlayerCharacter::StartSpinAttack()
 {
-	if (IsDead() || IsGettingUp())
+	if (!TryPrepareCombatAction())
 	{
 		return;
 	}
-
-	StopSprint();
 
 	if (UIFPlayerCombatComponent* const Combat = GetPlayerCombatComponent())
 	{
@@ -442,15 +476,17 @@ void AIFPlayerCharacter::UpdateMovementSpeed()
 
 float AIFPlayerCharacter::CalculateDesiredMovementSpeed() const
 {
-	const UIFCombatComponent* const Combat = GetCombatComponent();
-	if (Combat && Combat->IsAttacking())
+	if (const UIFCombatComponent* const Combat = GetCombatComponent())
 	{
-		return AttackMoveSpeed;
-	}
+		if (Combat->IsAttacking())
+		{
+			return AttackMoveSpeed;
+		}
 
-	if (Combat && Combat->IsBlocking())
-	{
-		return BlockSpeed;
+		if (Combat->IsBlocking())
+		{
+			return BlockingSpeed;
+		}
 	}
 
 	if (CachedMovementInput.Y < BackpedalInputThreshold)

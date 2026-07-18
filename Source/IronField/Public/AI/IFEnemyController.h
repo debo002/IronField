@@ -2,12 +2,12 @@
 
 #include "CoreMinimal.h"
 #include "AIController.h"
-#include "BehaviorTree/BlackboardComponent.h"
 #include "Combat/IFCombatTypes.h"
 #include "IFEnemyController.generated.h"
 
 class UBehaviorTree;
 class UIFCombatComponent;
+class UIFEnemyAIData;
 class AIFWaveManager;
 
 UCLASS()
@@ -16,11 +16,14 @@ class IRONFIELD_API AIFEnemyController : public AAIController
 	GENERATED_BODY()
 
 public:
-	AIFEnemyController();
-
 	bool IsReadyForNewAttack() const;
 
-	UIFCombatComponent* GetControlledCombatComponent() const;
+	UIFCombatComponent* GetControlledCombatComponent() const { return CachedCombatComponent; }
+
+	/** Shared AI tunables. Never null at runtime — falls back to CDO defaults if unset (with a one-time warning). */
+	const UIFEnemyAIData* GetAIData() const;
+
+	FName GetTargetActorKeyName() const { return TargetActorKeyName; }
 
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void OnUnPossess() override;
@@ -29,20 +32,12 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Behavior")
 	TObjectPtr<UBehaviorTree> BehaviorTreeAsset;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
-	float MinReattackCooldownSeconds = 1.8f;
+	UPROPERTY(EditDefaultsOnly, Category = "AI")
+	TObjectPtr<UIFEnemyAIData> AIData;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
-	float MaxReattackCooldownSeconds = 2.8f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
-	float BlockReactionChance = 0.3f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
-	float MinBlockHoldSeconds = 0.8f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Combat")
-	float MaxBlockHoldSeconds = 1.6f;
+	/** Must match the TargetActor key on BB_Enemy and every BT node selector. */
+	UPROPERTY(EditDefaultsOnly, Category = "AI")
+	FName TargetActorKeyName = TEXT("TargetActor");
 
 private:
 	float LastAttackEndedTime = -1.f;
@@ -54,37 +49,17 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<AIFWaveManager> CachedWaveManager;
 
-	FTimerHandle BlockHoldTimerHandle;
-	FDelegateHandle TargetObserverHandle;
-
 	UFUNCTION()
 	void HandleOwnCombatStateChanged(ECombatState PreviousState, ECombatState NewState);
-
-	UFUNCTION()
-	void HandleComboStepStarted(int32 ComboIndex);
 
 	UFUNCTION()
 	void HandleOwnHealthDepleted();
 
 	UFUNCTION()
-	void HandlePlayerCombatStateChanged(ECombatState PreviousState, ECombatState NewState);
-
-	UFUNCTION()
 	void HandlePlayerDied();
 
-	EBlackboardNotificationResult HandleTargetBlackboardChanged(const UBlackboardComponent& TargetBlackboard, FBlackboard::FKey KeyID);
-
-	// OnPossess can run before BeginPlay on world actors the behavior tree depends on.
 	void InitializeAfterPossession();
-
 	void BindOwnDelegates();
 	void UnbindOwnDelegates();
-
-	void BindPlayerBlockingDelegates();
-	void UnbindPlayerBlockingDelegates();
-
-	void ClearBlockHoldTimer();
-	void StopBlockAfterHold();
-
 	void ApplyMovementSpeedForState(ECombatState State);
 };

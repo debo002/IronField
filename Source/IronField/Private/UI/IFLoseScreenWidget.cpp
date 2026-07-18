@@ -19,7 +19,7 @@ void UIFLoseScreenWidget::NativeConstruct()
 	}
 }
 
-void UIFLoseScreenWidget::HandleRestartClicked()
+void UIFLoseScreenWidget::UnpauseAndOpenLevel(FName LevelName)
 {
 	if (!GetWorld())
 	{
@@ -27,16 +27,15 @@ void UIFLoseScreenWidget::HandleRestartClicked()
 	}
 
 	UGameplayStatics::SetGamePaused(GetWorld(), false);
-	UGameplayStatics::OpenLevel(this, FName(*UGameplayStatics::GetCurrentLevelName(this, true)));
+	UGameplayStatics::OpenLevel(this, LevelName);
+}
+
+void UIFLoseScreenWidget::HandleRestartClicked()
+{
+	UnpauseAndOpenLevel(FName(*UGameplayStatics::GetCurrentLevelName(this, true)));
 }
 
 void UIFLoseScreenWidget::HandleMainMenuClicked()
 {
-	if (!GetWorld())
-	{
-		return;
-	}
-
-	UGameplayStatics::SetGamePaused(GetWorld(), false);
-	UGameplayStatics::OpenLevel(this, UIFGameInstance::MainMenuLevelName);
+	UnpauseAndOpenLevel(UIFGameInstance::MainMenuLevelName);
 }

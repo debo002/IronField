@@ -1,35 +1,38 @@
 #include "AI/BTDecorator_IFInAttackRange.h"
 
-#include "AIController.h"
+#include "AI/IFBTUtils.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
-#include "BehaviorTree/BlackboardComponent.h"
-#include "AI/IFBTAttackAreaUtils.h"
 
 UBTDecorator_IFInAttackRange::UBTDecorator_IFInAttackRange()
 {
 	NodeName = TEXT("In Attack Range");
+	bNotifyTick = true;
+	bAllowAbortLowerPri = true;
+	bAllowAbortNone = true;
+	FlowAbortMode = EBTFlowAbortMode::Both;
 
 	TargetActorKey.AddObjectFilter(this, GET_MEMBER_NAME_CHECKED(UBTDecorator_IFInAttackRange, TargetActorKey), AActor::StaticClass());
 }
 
+uint16 UBTDecorator_IFInAttackRange::GetInstanceMemorySize() const
+{
+	return sizeof(FIFBTConditionMemory);
+}
+
+void UBTDecorator_IFInAttackRange::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
+{
+	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
+	UpdateConditionDecoratorAbort(OwnerComp, this, NodeMemory, CalculateRawConditionValue(OwnerComp, NodeMemory));
+}
+
 bool UBTDecorator_IFInAttackRange::CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const
 {
-	const UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
-	const AAIController* const AIController = OwnerComp.GetAIOwner();
-	if (!Blackboard || !AIController)
+	const AIFEnemyCharacter* const Enemy = GetControlledEnemy(OwnerComp);
+	const AActor* const Target = GetBlackboardTargetActor(OwnerComp, TargetActorKey);
+	if (!Enemy || !Target)
 	{
 		return false;
 	}
 
-	const APawn* const ControlledPawn = AIController->GetPawn();
-	const AActor* const TargetActor = Cast<AActor>(Blackboard->GetValueAsObject(TargetActorKey.SelectedKeyName));
-	if (!ControlledPawn || !TargetActor)
-	{
-		return false;
-	}
-
-	const float DistSq = FVector::DistSquared(ControlledPawn->GetActorLocation(), TargetActor->GetActorLocation());
-	const float Range = ResolveAttackRange(*TargetActor, PlayerAttackRange);
-
-	return DistSq <= FMath::Square(Range);
+	return IsWithinRange(Enemy, Target, Enemy->GetCombatRange());
 }

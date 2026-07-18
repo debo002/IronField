@@ -1,29 +1,26 @@
 #include "AI/BTTask_IFAttack.h"
 
+#include "AI/IFBTUtils.h"
 #include "AI/IFEnemyController.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
-#include "BehaviorTree/BlackboardComponent.h"
 #include "Combat/IFCombatComponent.h"
-#include "Kismet/KismetMathLibrary.h"
 
 UBTTask_IFAttack::UBTTask_IFAttack()
 {
 	NodeName = TEXT("Attack");
 	bNotifyTick = true;
-
 	TargetActorKey.AddObjectFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_IFAttack, TargetActorKey), AActor::StaticClass());
 }
 
 EBTNodeResult::Type UBTTask_IFAttack::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
 	AIFEnemyController* const EnemyController = Cast<AIFEnemyController>(OwnerComp.GetAIOwner());
-	const UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
-	if (!EnemyController || !Blackboard)
+	if (!EnemyController)
 	{
 		return EBTNodeResult::Failed;
 	}
 
-	AActor* const TargetActor = Cast<AActor>(Blackboard->GetValueAsObject(TargetActorKey.SelectedKeyName));
+	AActor* const TargetActor = GetBlackboardTargetActor(OwnerComp, TargetActorKey);
 	APawn* const ControlledPawn = EnemyController->GetPawn();
 	if (!TargetActor || !ControlledPawn)
 	{
@@ -41,14 +38,14 @@ EBTNodeResult::Type UBTTask_IFAttack::ExecuteTask(UBehaviorTreeComponent& OwnerC
 		return EBTNodeResult::Failed;
 	}
 
-	const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(
-		ControlledPawn->GetActorLocation(),
-		TargetActor->GetActorLocation());
+	EnemyController->StopMovement();
+
+	const FRotator LookAtRotation = (TargetActor->GetActorLocation() - ControlledPawn->GetActorLocation()).Rotation();
 	ControlledPawn->SetActorRotation(FRotator(0.f, LookAtRotation.Yaw, 0.f));
 
+	Combat->SetAttackTarget(TargetActor);
 	Combat->StartAttack();
 
-	// StartAttack can no-op (stamina, missing montage). Fail immediately so the tree retries later.
 	if (!Combat->IsAttacking())
 	{
 		return EBTNodeResult::Failed;
@@ -69,14 +66,8 @@ void UBTTask_IFAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMe
 	}
 
 	const UIFCombatComponent* const Combat = EnemyController->GetControlledCombatComponent();
-	if (!Combat)
+	if (!Combat || !Combat->IsAttacking())
 	{
-		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
-		return;
-	}
-
-	if (!Combat->IsAttacking())
-	{
-		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
+		FinishLatentTask(OwnerComp, Combat ? EBTNodeResult::Succeeded : EBTNodeResult::Failed);
 	}
 }

@@ -29,7 +29,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|StatBar")
 	FLinearColor FillColor = FLinearColor::White;
 
-	// Matches WBP_HUD's InterpAndSetBarPercent (FInterpTo) speed parameter.
+	/** Frame-rate independent ease speed toward the target percent (FInterpTo). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|StatBar", meta = (ClampMin = "0.0"))
 	float InterpSpeed = 8.f;
 

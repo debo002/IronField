@@ -1,23 +1,16 @@
 #include "Core/IFWaveManagerSubsystem.h"
+
+#include "Core/IFSingletonActorRegistry.h"
 #include "Wave/IFWaveManager.h"
-#include "Core/IFLog.h"
 
 void UIFWaveManagerSubsystem::RegisterWaveManager(AIFWaveManager* InWaveManager)
 {
-	if (ActiveWaveManager && ActiveWaveManager != InWaveManager)
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Subsystem] RegisterWaveManager called while a different wave manager (%s) is already registered. Overwriting."),
-			*GetNameSafe(ActiveWaveManager));
-	}
-	ActiveWaveManager = InWaveManager;
+	IFSingletonActorRegistry::Register(ActiveWaveManager, InWaveManager, TEXT("WaveManager"));
 }
 
 void UIFWaveManagerSubsystem::UnregisterWaveManager(AIFWaveManager* InWaveManager)
 {
-	if (ActiveWaveManager == InWaveManager)
-	{
-		ActiveWaveManager = nullptr;
-	}
+	IFSingletonActorRegistry::Unregister(ActiveWaveManager, InWaveManager);
 }
 
 AIFWaveManager* UIFWaveManagerSubsystem::GetWaveManager() const

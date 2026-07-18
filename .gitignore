@@ -41,5 +41,3 @@ Content/__ExternalObjects__/
 Content/*
 !Content/IronField/
 !Content/IronField/**
-!Content/ThirdParty/
-!Content/ThirdParty/**

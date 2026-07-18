@@ -1,8 +1,7 @@
 #include "Character/IFBaseCharacter.h"
 
-#include "Components/BoxComponent.h"
-#include "Components/CapsuleComponent.h"
 #include "Combat/IFCombatComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Core/IFLog.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
@@ -16,26 +15,6 @@ AIFBaseCharacter::AIFBaseCharacter(const FObjectInitializer& ObjectInitializer)
 	HealthComponent = CreateDefaultSubobject<UIFHealthComponent>(TEXT("Health"));
 	StaminaComponent = CreateDefaultSubobject<UIFStaminaComponent>(TEXT("Stamina"));
 	CombatComponent = CreateDefaultSubobject<UIFCombatComponent>(TEXT("Combat"));
-
-	WeaponCollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollision"));
-	WeaponCollisionBox->SetupAttachment(GetMesh(), WeaponSocketName);
-	WeaponCollisionBox->SetCollisionObjectType(ECC_WorldDynamic);
-	WeaponCollisionBox->SetCollisionResponseToAllChannels(ECR_Ignore);
-	WeaponCollisionBox->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
-	// ECC_GameTraceChannel1 is the project "Hittable Objectives" channel (e.g. stronghold hitbox).
-	WeaponCollisionBox->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
-	WeaponCollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	WeaponCollisionBox->SetGenerateOverlapEvents(false);
-
-	if (UCapsuleComponent* const CapsuleComp = GetCapsuleComponent())
-	{
-		CapsuleComp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
-	}
-
-	if (USkeletalMeshComponent* const MeshComp = GetMesh())
-	{
-		MeshComp->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
-	}
 }
 
 
@@ -59,15 +38,31 @@ void AIFBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	AttachWeaponCollisionToSocket();
+	// Cache the live profile names once so RestoreCollisionAfterDeath() can restore them exactly,
+	// without hardcoding strings that can silently go stale if profiles are renamed.
+	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
+	{
+		CapsuleCollisionProfile = Capsule->GetCollisionProfileName();
+	}
+	if (USkeletalMeshComponent* const MeshComp = GetMesh())
+	{
+		MeshCollisionProfile = MeshComp->GetCollisionProfileName();
+	}
+
+	// Cache original movement rotation settings
+	if (const UCharacterMovementComponent* const Movement = GetCharacterMovement())
+	{
+		bSavedOrientRotationToMovement = Movement->bOrientRotationToMovement;
+		bSavedUseControllerDesiredRotation = Movement->bUseControllerDesiredRotation;
+	}
+
 	BindGameplayDelegates();
 }
 
 void AIFBaseCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::EndPlay(EndPlayReason);
-
 	UnbindGameplayDelegates();
+	Super::EndPlay(EndPlayReason);
 }
 
 void AIFBaseCharacter::Landed(const FHitResult& Hit)
@@ -125,14 +120,19 @@ void AIFBaseCharacter::HandleStaminaDepleted()
 
 void AIFBaseCharacter::HandleDeath()
 {
-	if (!CombatComponent || CombatComponent->IsDead())
+	// bHasDied is the single re-entrancy guard — owned here, not derived from CombatComponent state.
+	if (bHasDied)
 	{
 		return;
 	}
+	bHasDied = true;
 
 	UE_LOG(LogIronField, Log, TEXT("[IF-Death] %s died."), *GetName());
 
-	CombatComponent->HandleOwnerDeath();
+	if (CombatComponent)
+	{
+		CombatComponent->HandleOwnerDeath();
+	}
 
 	if (UAnimInstance* const AnimInstance = GetMeshAnimInstance())
 	{
@@ -164,14 +164,19 @@ void AIFBaseCharacter::StopMovementForDeath()
 	{
 		Movement->DisableMovement();
 	}
+
+	// Stop the controller rotation from continuing to turn the dead pawn.
+	Movement->bUseControllerDesiredRotation = false;
+	Movement->bOrientRotationToMovement = false;
 }
 
 void AIFBaseCharacter::DisableCollisionForDeath()
 {
 	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
 	{
-		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+		// Keep capsule collision enabled against the environment so it doesn't fall through the ground,
+		// but ignore Pawns so other characters can walk through the corpse.
+		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 		Capsule->SetCanEverAffectNavigation(false);
 	}
 
@@ -187,39 +192,28 @@ void AIFBaseCharacter::RestoreCollisionAfterDeath()
 {
 	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
 	{
-		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		Capsule->SetCollisionProfileName(FName("Pawn"));
-		Capsule->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		Capsule->SetCollisionProfileName(CapsuleCollisionProfile);
 		Capsule->SetCanEverAffectNavigation(true);
 	}
 
 	if (USkeletalMeshComponent* const LocalMesh = GetMesh())
 	{
 		LocalMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		LocalMesh->SetCollisionProfileName(FName("CharacterMesh"));
-		LocalMesh->SetCollisionResponseToChannel(ECC_Camera, ECR_Ignore);
+		LocalMesh->SetCollisionProfileName(MeshCollisionProfile);
 		LocalMesh->SetCanEverAffectNavigation(true);
 	}
 
 	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 	{
 		Movement->SetMovementMode(MOVE_Walking);
+		Movement->FindFloor(GetActorLocation(), Movement->CurrentFloor, false);
+
+		// Restore original movement rotation settings
+		Movement->bOrientRotationToMovement = bSavedOrientRotationToMovement;
+		Movement->bUseControllerDesiredRotation = bSavedUseControllerDesiredRotation;
 	}
 }
 
-void AIFBaseCharacter::AttachWeaponCollisionToSocket()
-{
-	if (!WeaponCollisionBox || !GetMesh() || WeaponSocketName.IsNone())
-	{
-		return;
-	}
-
-	// KeepRelative preserves box offsets tuned on the Blueprint; only the socket name is reapplied.
-	WeaponCollisionBox->AttachToComponent(
-		GetMesh(),
-		FAttachmentTransformRules::KeepRelativeTransform,
-		WeaponSocketName);
-}
 
 UAnimInstance* AIFBaseCharacter::GetMeshAnimInstance() const
 {

@@ -15,6 +15,7 @@ enum class ECombatState : uint8
 	Dead
 };
 
+/** One step in a melee combo. Shared by player and melee enemies — no AI fields. */
 USTRUCT(BlueprintType)
 struct FIFComboStep
 {
@@ -31,9 +32,6 @@ struct FIFComboStep
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|ComboStep")
 	TSubclassOf<UDamageType> DamageTypeClass;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|ComboStep", meta = (ClampMin = "0.0", ClampMax = "1.0"))
-	float AIContinueChance = 0.f;
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnHealthDepleted);
@@ -43,4 +41,3 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnStaminaDepleted);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStaminaChanged, float, Percent);
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnCombatStateChanged, ECombatState, PreviousState, ECombatState, NewState);
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnComboStepStarted, int32, ComboIndex);

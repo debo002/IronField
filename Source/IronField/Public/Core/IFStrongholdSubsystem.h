@@ -13,10 +13,9 @@ class IRONFIELD_API UIFStrongholdSubsystem : public UWorldSubsystem
 
 public:
 	void RegisterStronghold(AIFStronghold* InStronghold);
-
 	void UnregisterStronghold(AIFStronghold* InStronghold);
 
-	UFUNCTION(BlueprintPure, Category = "Stronghold")
+	UFUNCTION(BlueprintPure, Category = "IronField|Stronghold")
 	AIFStronghold* GetStronghold() const;
 
 private:

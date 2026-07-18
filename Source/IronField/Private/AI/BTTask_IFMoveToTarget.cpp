@@ -1,71 +1,89 @@
 #include "AI/BTTask_IFMoveToTarget.h"
 
 #include "AIController.h"
+#include "AI/IFBTUtils.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
-#include "BehaviorTree/BlackboardComponent.h"
-#include "AI/IFBTAttackAreaUtils.h"
 #include "Navigation/PathFollowingComponent.h"
+
+namespace
+{
+	struct FIFMoveToMemory
+	{
+		float TimeSinceRepath = 0.f;
+	};
+
+	constexpr float RepathInterval = 0.25f;
+}
 
 UBTTask_IFMoveToTarget::UBTTask_IFMoveToTarget()
 {
 	NodeName = TEXT("Move To Target");
 	bNotifyTick = true;
-
 	TargetActorKey.AddObjectFilter(this, GET_MEMBER_NAME_CHECKED(UBTTask_IFMoveToTarget, TargetActorKey), AActor::StaticClass());
+}
+
+uint16 UBTTask_IFMoveToTarget::GetInstanceMemorySize() const
+{
+	return sizeof(FIFMoveToMemory);
 }
 
 EBTNodeResult::Type UBTTask_IFMoveToTarget::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
+	new (NodeMemory) FIFMoveToMemory();
+
 	AAIController* const AIController = OwnerComp.GetAIOwner();
-	const UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
-	if (!AIController || !Blackboard)
+	AIFEnemyCharacter* const Enemy = GetControlledEnemy(OwnerComp);
+	AActor* const Target = GetBlackboardTargetActor(OwnerComp, TargetActorKey);
+	if (!AIController || !Enemy || !Target)
 	{
 		return EBTNodeResult::Failed;
 	}
 
-	if (TargetActorKey.SelectedKeyName.IsNone())
+	const float Range = Enemy->GetCombatRange();
+	if (IsWithinRange(Enemy, Target, Range))
 	{
-		return EBTNodeResult::Failed;
-	}
-
-	AActor* const TargetActor = Cast<AActor>(Blackboard->GetValueAsObject(TargetActorKey.SelectedKeyName));
-	if (!TargetActor)
-	{
-		return EBTNodeResult::Failed;
-	}
-
-	const float Radius = ResolveAcceptanceRadius(*TargetActor, AcceptanceRadius);
-
-	// Radius already includes target geometry; bStopOnOverlap would expand it again and stop too early.
-	const EPathFollowingRequestResult::Type RequestResult = AIController->MoveToActor(TargetActor, Radius, false);
-
-	switch (RequestResult)
-	{
-	case EPathFollowingRequestResult::Failed:
-		return EBTNodeResult::Failed;
-
-	case EPathFollowingRequestResult::AlreadyAtGoal:
 		return EBTNodeResult::Succeeded;
-
-	case EPathFollowingRequestResult::RequestSuccessful:
-	default:
-		return EBTNodeResult::InProgress;
 	}
+
+	const EPathFollowingRequestResult::Type Result = AIController->MoveToActor(Target, Range, false);
+	if (Result == EPathFollowingRequestResult::Failed)
+	{
+		return EBTNodeResult::Failed;
+	}
+	if (Result == EPathFollowingRequestResult::AlreadyAtGoal)
+	{
+		return EBTNodeResult::Succeeded;
+	}
+
+	return EBTNodeResult::InProgress;
 }
 
 void UBTTask_IFMoveToTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
 	Super::TickTask(OwnerComp, NodeMemory, DeltaSeconds);
 
-	const AAIController* const AIController = OwnerComp.GetAIOwner();
-	if (!AIController)
+	FIFMoveToMemory* const Memory = reinterpret_cast<FIFMoveToMemory*>(NodeMemory);
+	AAIController* const AIController = OwnerComp.GetAIOwner();
+	AIFEnemyCharacter* const Enemy = GetControlledEnemy(OwnerComp);
+	AActor* const Target = GetBlackboardTargetActor(OwnerComp, TargetActorKey);
+	if (!Memory || !AIController || !Enemy || !Target)
 	{
 		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
 		return;
 	}
 
-	if (AIController->GetMoveStatus() == EPathFollowingStatus::Idle)
+	const float Range = Enemy->GetCombatRange();
+	if (IsWithinRange(Enemy, Target, Range))
 	{
+		AIController->StopMovement();
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
+		return;
+	}
+
+	Memory->TimeSinceRepath += DeltaSeconds;
+	if (Memory->TimeSinceRepath >= RepathInterval)
+	{
+		Memory->TimeSinceRepath = 0.f;
+		AIController->MoveToActor(Target, Range, false);
 	}
 }

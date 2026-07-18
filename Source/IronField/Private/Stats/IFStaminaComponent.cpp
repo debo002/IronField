@@ -4,8 +4,8 @@ UIFStaminaComponent::UIFStaminaComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
+	CurrentStamina = MaxStamina;
 }
-
 
 bool UIFStaminaComponent::TryConsumeStamina(float Amount)
 {
@@ -46,13 +46,6 @@ void UIFStaminaComponent::StopContinuousDrain()
 	UpdateTickEnabled();
 }
 
-
-float UIFStaminaComponent::GetStaminaPercent() const
-{
-	return MaxStamina > 0.f ? CurrentStamina / MaxStamina : 0.f;
-}
-
-
 void UIFStaminaComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -82,7 +75,6 @@ void UIFStaminaComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 
 	RegenerateStamina(DeltaTime);
 }
-
 
 bool UIFStaminaComponent::CanRegenerateStamina() const
 {
@@ -124,17 +116,11 @@ void UIFStaminaComponent::UpdateTickEnabled()
 void UIFStaminaComponent::SetStaminaClamped(float NewStamina)
 {
 	const float PreviousStamina = CurrentStamina;
-	CurrentStamina = FMath::Clamp(NewStamina, 0.f, MaxStamina);
-	BroadcastStaminaChangedIfNeeded(PreviousStamina);
-	BroadcastStaminaDepletedIfNeeded(PreviousStamina);
-}
-
-void UIFStaminaComponent::BroadcastStaminaChangedIfNeeded(float PreviousStamina)
-{
-	if (!FMath::IsNearlyEqual(CurrentStamina, PreviousStamina))
+	if (ApplyClampedValue(CurrentStamina, MaxStamina, NewStamina))
 	{
 		OnStaminaChanged.Broadcast(GetStaminaPercent());
 	}
+	BroadcastStaminaDepletedIfNeeded(PreviousStamina);
 }
 
 void UIFStaminaComponent::BroadcastStaminaDepletedIfNeeded(float PreviousStamina)

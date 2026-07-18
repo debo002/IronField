@@ -12,10 +12,10 @@ class IRONFIELD_API AIFMenuPlayerController : public APlayerController
 	GENERATED_BODY()
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "PlayerController|UI")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|PlayerController|UI")
 	TSubclassOf<UIFMainMenuWidget> MainMenuWidgetClass;
 
-	UPROPERTY(VisibleInstanceOnly, Transient, Category = "PlayerController|UI")
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "IronField|PlayerController|UI")
 	TObjectPtr<UIFMainMenuWidget> MainMenuWidget;
 
 	virtual void BeginPlay() override;
@@ -23,5 +23,4 @@ protected:
 
 private:
 	void CreateAndShowMainMenu();
-	void ApplyMenuInputMode();
 };

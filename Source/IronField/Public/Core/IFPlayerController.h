@@ -4,9 +4,9 @@
 #include "GameFramework/PlayerController.h"
 #include "IFPlayerController.generated.h"
 
+class UIFHUD;
 class UIFLoseScreenWidget;
 class USoundBase;
-class UUserWidget;
 
 UCLASS()
 class IRONFIELD_API AIFPlayerController : public APlayerController
@@ -17,19 +17,19 @@ public:
 	void ShowLoseScreen();
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "PlayerController|UI")
-	TSubclassOf<UUserWidget> HUDWidgetClass;
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|PlayerController|UI")
+	TSubclassOf<UIFHUD> HUDWidgetClass;
 
-	UPROPERTY(VisibleInstanceOnly, Transient, Category = "PlayerController|UI")
-	TObjectPtr<UUserWidget> HUDWidget;
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "IronField|PlayerController|UI")
+	TObjectPtr<UIFHUD> HUDWidget;
 
-	UPROPERTY(EditDefaultsOnly, Category = "PlayerController|UI")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|PlayerController|UI")
 	TSubclassOf<UIFLoseScreenWidget> LoseScreenWidgetClass;
 
-	UPROPERTY(VisibleInstanceOnly, Transient, Category = "PlayerController|UI")
+	UPROPERTY(VisibleInstanceOnly, Transient, Category = "IronField|PlayerController|UI")
 	TObjectPtr<UIFLoseScreenWidget> LoseScreenWidget;
 
-	UPROPERTY(EditDefaultsOnly, Category = "PlayerController|UI")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|PlayerController|UI")
 	TObjectPtr<USoundBase> LoseStinger;
 
 	virtual void BeginPlay() override;

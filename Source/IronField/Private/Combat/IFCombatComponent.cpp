@@ -1,16 +1,13 @@
 #include "Combat/IFCombatComponent.h"
 
 #include "Animation/AnimInstance.h"
-#include "AIController.h"
-#include "Building/IFStronghold.h"
-#include "Character/IFBaseCharacter.h"
+#include "Combat/IFCombatTargetingUtils.h"
+#include "Combat/IFWeaponBoxOwner.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Core/IFLog.h"
 #include "Core/IFAnimMontageUtils.h"
-#include "Engine/DamageEvents.h"
+#include "Core/IFLog.h"
 #include "GameFramework/Character.h"
-#include "GameFramework/Pawn.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
 
@@ -45,13 +42,18 @@ void UIFCombatComponent::StartBlock()
 		return;
 	}
 
-	SetCombatState(ECombatState::Blocking);
+	if (!BlockMontage)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s StartBlock with no BlockMontage assigned — logic-only block."),
+			*GetNameSafe(GetOwner()));
+	}
 
 	if (!TryPlayBlockMontage())
 	{
-		SetCombatState(ECombatState::Idle);
 		return;
 	}
+
+	SetCombatState(ECombatState::Blocking);
 
 	if (StaminaComponent)
 	{
@@ -66,11 +68,9 @@ void UIFCombatComponent::StopBlock()
 		return;
 	}
 
-	// Montage_Stop can fire its end delegate immediately, so leave Blocking before stopping.
 	SetCombatState(ECombatState::Idle);
 
 	UAnimInstance* const AnimInstance = GetAnimInstance();
-
 	if (AnimInstance && ActiveBlockMontage)
 	{
 		AnimInstance->Montage_Stop(BlockBlendOutTime, ActiveBlockMontage);
@@ -147,7 +147,7 @@ void UIFCombatComponent::EndAttackCollision()
 	SetWeaponCollisionEnabled(false);
 }
 
-void UIFCombatComponent::ReceiveMeleeAttack(AActor* Instigator, float Damage, TSubclassOf<UDamageType> DamageTypeClass)
+void UIFCombatComponent::ReceiveAttack(AActor* Instigator, float Damage, TSubclassOf<UDamageType> DamageTypeClass)
 {
 	if (IsDead())
 	{
@@ -155,14 +155,7 @@ void UIFCombatComponent::ReceiveMeleeAttack(AActor* Instigator, float Damage, TS
 	}
 
 	const bool bFacing = IsOwnerFacingTarget(Instigator);
-
-	if (IsBlocking() && bFacing)
-	{
-		PlayBlockReactionMontage();
-		return;
-	}
-
-	if (ShouldReactivelyBlock(bFacing))
+	if ((IsBlocking() && bFacing) || ShouldReactivelyBlock(bFacing))
 	{
 		PlayBlockReactionMontage();
 		return;
@@ -174,7 +167,7 @@ void UIFCombatComponent::ReceiveMeleeAttack(AActor* Instigator, float Damage, TS
 		return;
 	}
 
-	ApplyDamageTo(Owner, Instigator, Damage, DamageTypeClass);
+	IFCombatTargetingUtils::ApplyDamageTo(Owner, Instigator, Damage, DamageTypeClass);
 
 	if (IsDead())
 	{
@@ -184,36 +177,28 @@ void UIFCombatComponent::ReceiveMeleeAttack(AActor* Instigator, float Damage, TS
 	PlayHitReactionMontage();
 }
 
-
 void UIFCombatComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
 	AActor* const Owner = GetOwner();
-
 	const ACharacter* const OwnerCharacter = Cast<ACharacter>(Owner);
 	CachedMesh = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
-
 	StaminaComponent = Owner ? Owner->FindComponentByClass<UIFStaminaComponent>() : nullptr;
 
-	const AIFBaseCharacter* const BaseCharacterOwner = Cast<AIFBaseCharacter>(Owner);
-	WeaponCollisionBox = BaseCharacterOwner ? BaseCharacterOwner->GetWeaponCollisionBox() : nullptr;
+	if (const IIFWeaponBoxOwner* const WeaponOwner = Cast<IIFWeaponBoxOwner>(Owner))
+	{
+		WeaponCollisionBox = WeaponOwner->GetWeaponCollisionBox();
+	}
 
 	if (WeaponCollisionBox)
 	{
 		WeaponCollisionBox->OnComponentBeginOverlap.AddDynamic(this, &UIFCombatComponent::HandleWeaponBoxBeginOverlap);
 	}
-	else
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has no WeaponCollisionBox - attacks will never register hits."),
-			*GetNameSafe(Owner));
-	}
 }
 
 void UIFCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	Super::EndPlay(EndPlayReason);
-
 	if (WeaponCollisionBox)
 	{
 		WeaponCollisionBox->OnComponentBeginOverlap.RemoveAll(this);
@@ -228,12 +213,8 @@ void UIFCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		StaminaComponent->StopContinuousDrain();
 	}
-}
 
-
-float UIFCombatComponent::GetComboContinueChance(int32 ComboIndex) const
-{
-	return ComboSteps.IsValidIndex(ComboIndex) ? ComboSteps[ComboIndex].AIContinueChance : 0.f;
+	Super::EndPlay(EndPlayReason);
 }
 
 float UIFCombatComponent::GetCurrentAttackDamage() const
@@ -246,11 +227,19 @@ TSubclassOf<UDamageType> UIFCombatComponent::GetCurrentDamageTypeClass() const
 	return ComboSteps.IsValidIndex(CurrentComboIndex) ? ComboSteps[CurrentComboIndex].DamageTypeClass : nullptr;
 }
 
-bool UIFCombatComponent::HasUsableStamina(float Amount) const
+bool UIFCombatComponent::CanQueueComboAttack() const
 {
-	return StaminaComponent && StaminaComponent->HasStamina(Amount);
+	return ActiveAttackMontage != nullptr && HasNextComboStep();
 }
 
+bool UIFCombatComponent::HasUsableStamina(float Amount) const
+{
+	if (Amount <= 0.f)
+	{
+		return true;
+	}
+	return StaminaComponent && StaminaComponent->HasStamina(Amount);
+}
 
 void UIFCombatComponent::SetCombatState(ECombatState NewState)
 {
@@ -277,15 +266,9 @@ void UIFCombatComponent::ResetRegisteredAttackHits()
 	RegisteredAttackHits.Reset();
 }
 
-
 bool UIFCombatComponent::CanPlayAttackMontage(int32 ComboIndex) const
 {
-	if (!ComboSteps.IsValidIndex(ComboIndex))
-	{
-		return false;
-	}
-
-	if (!ComboSteps[ComboIndex].AttackMontage)
+	if (!ComboSteps.IsValidIndex(ComboIndex) || !ComboSteps[ComboIndex].AttackMontage)
 	{
 		return false;
 	}
@@ -295,7 +278,7 @@ bool UIFCombatComponent::CanPlayAttackMontage(int32 ComboIndex) const
 
 bool UIFCombatComponent::TryPlayAttackMontage(int32 ComboIndex)
 {
-	if (!CanPlayAttackMontage(ComboIndex) || !StaminaComponent)
+	if (!CanPlayAttackMontage(ComboIndex))
 	{
 		return false;
 	}
@@ -304,7 +287,6 @@ bool UIFCombatComponent::TryPlayAttackMontage(int32 ComboIndex)
 	UAnimMontage* const AttackMontage = ComboSteps[ComboIndex].AttackMontage;
 	const float StaminaCost = GetComboStaminaCost(ComboIndex);
 
-	// Play first so a bad montage never spends stamina. Cost was already gated by CanPlayAttackMontage.
 	ClearAttackMontageDelegate();
 
 	const float PlayLength = AnimInstance->Montage_Play(AttackMontage);
@@ -313,9 +295,8 @@ bool UIFCombatComponent::TryPlayAttackMontage(int32 ComboIndex)
 		return false;
 	}
 
-	if (!StaminaComponent->TryConsumeStamina(StaminaCost))
+	if (StaminaCost > 0.f && (!StaminaComponent || !StaminaComponent->TryConsumeStamina(StaminaCost)))
 	{
-		// Race with continuous drain (sprint/block/spin) between the gate check and now.
 		AnimInstance->Montage_Stop(0.f, AttackMontage);
 		return false;
 	}
@@ -325,7 +306,6 @@ bool UIFCombatComponent::TryPlayAttackMontage(int32 ComboIndex)
 	bComboQueued = false;
 	ResetRegisteredAttackHits();
 	SetCombatState(ECombatState::Attacking);
-	OnComboStepStarted.Broadcast(CurrentComboIndex);
 
 	FOnMontageEnded EndDelegate;
 	EndDelegate.BindUObject(this, &UIFCombatComponent::HandleAttackMontageEnded);
@@ -347,13 +327,14 @@ void UIFCombatComponent::HandleAttackMontageEnded(UAnimMontage* Montage, bool bI
 		return;
 	}
 
-	if (bComboQueued)
+	const int32 NextComboIndex = CurrentComboIndex + 1;
+	// bComboQueued = player input buffer. GetComboContinueChance is 0 except on melee AI.
+	const bool bWantsNext = bComboQueued || (FMath::FRand() < GetComboContinueChance(CurrentComboIndex));
+	bComboQueued = false;
+
+	if (bWantsNext && TryPlayAttackMontage(NextComboIndex))
 	{
-		const int32 NextComboIndex = CurrentComboIndex + 1;
-		if (TryPlayAttackMontage(NextComboIndex))
-		{
-			return;
-		}
+		return;
 	}
 
 	ResetCombatState();
@@ -361,7 +342,7 @@ void UIFCombatComponent::HandleAttackMontageEnded(UAnimMontage* Montage, bool bI
 
 void UIFCombatComponent::ClearAttackMontageDelegate()
 {
-	ClearMontageEndDelegate(GetAnimInstance(), ActiveAttackMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(GetAnimInstance(), ActiveAttackMontage);
 }
 
 float UIFCombatComponent::GetComboStaminaCost(int32 ComboIndex) const
@@ -369,18 +350,16 @@ float UIFCombatComponent::GetComboStaminaCost(int32 ComboIndex) const
 	return ComboSteps.IsValidIndex(ComboIndex) ? ComboSteps[ComboIndex].StaminaCost : 0.f;
 }
 
-
 bool UIFCombatComponent::TryPlayBlockMontage()
 {
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	if (!AnimInstance || !BlockMontage)
 	{
-		// Still allow blocking without a montage so stamina drain and damage rejection work.
 		ActiveBlockMontage = nullptr;
 		return true;
 	}
 
-	ClearMontageEndDelegate(AnimInstance, BlockMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockMontage);
 
 	const float PlayLength = AnimInstance->Montage_Play(BlockMontage);
 	if (PlayLength <= 0.f)
@@ -407,11 +386,8 @@ bool UIFCombatComponent::IsOwnerFacingTarget(AActor* TargetActor) const
 		return true;
 	}
 
-	const FVector OwnerForward = Owner->GetActorForwardVector().GetSafeNormal2D();
-	const float Dot = FVector::DotProduct(OwnerForward, DirectionToTarget);
-	return Dot >= BlockFacingDotThreshold;
+	return FVector::DotProduct(Owner->GetActorForwardVector().GetSafeNormal2D(), DirectionToTarget) >= BlockFacingDotThreshold;
 }
-
 
 void UIFCombatComponent::PlayHitReactionMontage()
 {
@@ -421,7 +397,7 @@ void UIFCombatComponent::PlayHitReactionMontage()
 		return;
 	}
 
-	ClearMontageEndDelegate(AnimInstance, HitReactionMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, HitReactionMontage);
 
 	if (AnimInstance->Montage_Play(HitReactionMontage) > 0.f)
 	{
@@ -444,7 +420,7 @@ void UIFCombatComponent::PlayBlockReactionMontage()
 		AnimInstance->Montage_Stop(FMath::Max(0.01f, BlockBlendOutTime), BlockMontage);
 	}
 
-	ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
 
 	const float PlayLength = AnimInstance->Montage_Play(BlockReactionMontage);
 	if (PlayLength > 0.f)
@@ -464,7 +440,7 @@ void UIFCombatComponent::HandleHitReactionMontageEnded(UAnimMontage* Montage, bo
 		return;
 	}
 
-	ClearMontageEndDelegate(GetAnimInstance(), HitReactionMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(GetAnimInstance(), HitReactionMontage);
 
 	if (IsBlocking())
 	{
@@ -479,7 +455,7 @@ void UIFCombatComponent::HandleBlockReactionMontageEnded(UAnimMontage* Montage, 
 		return;
 	}
 
-	ClearMontageEndDelegate(GetAnimInstance(), BlockReactionMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(GetAnimInstance(), BlockReactionMontage);
 	ActiveBlockMontage = nullptr;
 
 	if (IsBlocking())
@@ -491,10 +467,9 @@ void UIFCombatComponent::HandleBlockReactionMontageEnded(UAnimMontage* Montage, 
 void UIFCombatComponent::ClearReactionMontageDelegates()
 {
 	UAnimInstance* const AnimInstance = GetAnimInstance();
-	ClearMontageEndDelegate(AnimInstance, HitReactionMontage);
-	ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, HitReactionMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
 }
-
 
 void UIFCombatComponent::HandleWeaponBoxBeginOverlap(UPrimitiveComponent*, AActor* OtherActor, UPrimitiveComponent*, int32, bool, const FHitResult&)
 {
@@ -503,19 +478,12 @@ void UIFCombatComponent::HandleWeaponBoxBeginOverlap(UPrimitiveComponent*, AActo
 
 void UIFCombatComponent::ResolveAttackHit(AActor* TargetActor)
 {
-	UIFHealthComponent* const TargetHealth = GetValidAttackTargetHealth(TargetActor);
-	if (!TargetHealth || !TryRegisterAttackHit(TargetActor))
+	if (!GetValidActiveAttackTargetHealth(TargetActor) || !TryRegisterAttackHit(TargetActor))
 	{
 		return;
 	}
 
-	if (UIFCombatComponent* const TargetCombat = TargetActor->FindComponentByClass<UIFCombatComponent>())
-	{
-		TargetCombat->ReceiveMeleeAttack(GetOwner(), ActiveAttackDamage, ActiveDamageTypeClass);
-		return;
-	}
-
-	ApplyDamageTo(TargetActor, GetOwner(), ActiveAttackDamage, ActiveDamageTypeClass);
+	IFCombatTargetingUtils::DeliverDamage(TargetActor, GetOwner(), ActiveAttackDamage, ActiveDamageTypeClass);
 }
 
 bool UIFCombatComponent::TryRegisterAttackHit(AActor* TargetActor)
@@ -534,57 +502,14 @@ bool UIFCombatComponent::TryRegisterAttackHit(AActor* TargetActor)
 	return true;
 }
 
-UIFHealthComponent* UIFCombatComponent::GetValidAttackTargetHealth(AActor* TargetActor) const
+UIFHealthComponent* UIFCombatComponent::GetValidActiveAttackTargetHealth(AActor* TargetActor) const
 {
 	if (!bAttackCollisionActive || !IsAttacking())
 	{
 		return nullptr;
 	}
 
-	const AActor* const Owner = GetOwner();
-	if (!TargetActor || TargetActor == Owner)
-	{
-		return nullptr;
-	}
-
-	const APawn* const OwnerPawn = Cast<APawn>(Owner);
-	const APawn* const TargetPawn = Cast<APawn>(TargetActor);
-	if (OwnerPawn && TargetPawn)
-	{
-		const bool bOwnerIsAI = OwnerPawn->GetController() && OwnerPawn->GetController()->IsA<AAIController>();
-		const bool bTargetIsAI = TargetPawn->GetController() && TargetPawn->GetController()->IsA<AAIController>();
-		if (bOwnerIsAI && bTargetIsAI)
-		{
-			return nullptr;
-		}
-	}
-
-	// The stronghold is the player's own objective to defend - only enemy AI may damage it, never the player.
-	if (Cast<AIFStronghold>(TargetActor))
-	{
-		const bool bOwnerIsAI = OwnerPawn && OwnerPawn->GetController() && OwnerPawn->GetController()->IsA<AAIController>();
-		if (!bOwnerIsAI)
-		{
-			return nullptr;
-		}
-	}
-
-	UIFHealthComponent* const TargetHealth = TargetActor->FindComponentByClass<UIFHealthComponent>();
-	return (TargetHealth && !TargetHealth->IsDead()) ? TargetHealth : nullptr;
-}
-
-void UIFCombatComponent::ApplyDamageTo(AActor* TargetActor, AActor* Instigator, float Damage, TSubclassOf<UDamageType> DamageTypeClass) const
-{
-	if (!TargetActor || !Instigator)
-	{
-		return;
-	}
-
-	const APawn* const InstigatorPawn = Cast<APawn>(Instigator);
-	AController* const InstigatorController = InstigatorPawn ? InstigatorPawn->GetController() : nullptr;
-
-	FDamageEvent DamageEvent(DamageTypeClass);
-	TargetActor->TakeDamage(Damage, DamageEvent, InstigatorController, Instigator);
+	return IFCombatTargetingUtils::GetValidAttackTargetHealth(GetOwner(), TargetActor);
 }
 
 void UIFCombatComponent::SetWeaponCollisionEnabled(bool bEnabled) const

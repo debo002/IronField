@@ -2,10 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
-#include "Core/IFGameInstance.h"
 #include "IFMainMenuWidget.generated.h"
 
 class UButton;
+enum class EIFRunMode : uint8;
 
 UCLASS()
 class IRONFIELD_API UIFMainMenuWidget : public UUserWidget

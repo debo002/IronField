@@ -2,11 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Combat/IFCombatTypes.h"
-#include "Components/ActorComponent.h"
+#include "Stats/IFStatComponent.h"
 #include "IFHealthComponent.generated.h"
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class IRONFIELD_API UIFHealthComponent : public UActorComponent
+class IRONFIELD_API UIFHealthComponent : public UIFStatComponent
 {
 	GENERATED_BODY()
 
@@ -20,9 +20,6 @@ public:
 	FOnHealthChanged OnHealthChanged;
 
 	UFUNCTION(BlueprintCallable, Category = "Health|Actions")
-	void ApplyDamage(float Amount);
-
-	UFUNCTION(BlueprintCallable, Category = "Health|Actions")
 	void ApplyHealing(float Amount);
 
 	UFUNCTION(BlueprintCallable, Category = "Health|Actions")
@@ -32,7 +29,7 @@ public:
 	void SetInvincible(bool bNewInvincible) { bIsInvincible = bNewInvincible; }
 
 	UFUNCTION(BlueprintPure, Category = "Health|State")
-	float GetHealthPercent() const;
+	float GetHealthPercent() const { return ComputePercent(CurrentHealth, MaxHealth); }
 
 	UFUNCTION(BlueprintPure, Category = "Health|State")
 	bool IsDead() const { return bIsDead; }
@@ -59,9 +56,11 @@ private:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Health|State", meta = (AllowPrivateAccess = "true"))
 	bool bIsDead = false;
 
+	/** Internal only — combat must use TakeDamage / DeliverDamage so instigator is tracked. */
+	void ApplyDamage(float Amount);
+
 	UFUNCTION()
 	void HandleOwnerTakeAnyDamage(AActor* DamagedActor, float Damage, const UDamageType* DamageType, AController* InstigatedBy, AActor* DamageCauser);
 
 	void SetHealthClamped(float NewHealth);
-	void BroadcastHealthChangedIfNeeded(float PreviousHealth);
 };

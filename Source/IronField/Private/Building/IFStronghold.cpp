@@ -14,21 +14,11 @@ AIFStronghold::AIFStronghold()
 
 	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
 	MeshComponent->SetupAttachment(RootComponent);
-	MeshComponent->SetGenerateOverlapEvents(false);
 	MeshComponent->SetCanEverAffectNavigation(false);
 
 	HitboxComponent = CreateDefaultSubobject<USphereComponent>(TEXT("HitboxComponent"));
 	HitboxComponent->SetupAttachment(RootComponent);
 	HitboxComponent->SetSphereRadius(200.f);
-	// ECC_GameTraceChannel1 is the project "Hittable Objectives" channel (shared with weapon boxes).
-	HitboxComponent->SetCollisionObjectType(ECC_GameTraceChannel1);
-	HitboxComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
-	HitboxComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
-	HitboxComponent->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
-	// Weapon collision boxes are WorldDynamic; they must explicitly overlap this channel.
-	HitboxComponent->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
-	HitboxComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-	HitboxComponent->SetGenerateOverlapEvents(true);
 
 	HealthComponent = CreateDefaultSubobject<UIFHealthComponent>(TEXT("HealthComponent"));
 }
@@ -54,6 +44,12 @@ void AIFStronghold::BeginPlay()
 
 void AIFStronghold::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (HealthComponent)
+	{
+		HealthComponent->OnHealthChanged.RemoveAll(this);
+		HealthComponent->OnHealthDepleted.RemoveAll(this);
+	}
+
 	if (UWorld* const World = GetWorld())
 	{
 		if (UIFStrongholdSubsystem* const Subsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
@@ -63,22 +59,6 @@ void AIFStronghold::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 
 	Super::EndPlay(EndPlayReason);
-
-	if (HealthComponent)
-	{
-		HealthComponent->OnHealthChanged.RemoveAll(this);
-		HealthComponent->OnHealthDepleted.RemoveAll(this);
-	}
-}
-
-float AIFStronghold::GetAttackAreaRange() const
-{
-	return FMath::Max(0.f, AttackAreaRange);
-}
-
-float AIFStronghold::GetAttackAreaAcceptanceRadius() const
-{
-	return FMath::Clamp(MoveAcceptanceRadius, 0.f, GetAttackAreaRange());
 }
 
 void AIFStronghold::HandleHealthChanged(float Percent)
@@ -115,6 +95,7 @@ void AIFStronghold::HandleDestruction()
 {
 	OnStrongholdDestroyed.Broadcast(this);
 
+	// Component-level off for mesh/hitbox queries, plus actor-level override so nothing re-enables mid-frame.
 	if (MeshComponent)
 	{
 		MeshComponent->SetVisibility(false);

@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTTaskNode.h"
+#include "BehaviorTree/BehaviorTreeTypes.h"
 #include "BTTask_IFMoveToTarget.generated.h"
 
 UCLASS()
@@ -13,12 +14,10 @@ public:
 	UBTTask_IFMoveToTarget();
 
 protected:
+	virtual uint16 GetInstanceMemorySize() const override;
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 
-	UPROPERTY(EditAnywhere, Category = "Movement")
+	UPROPERTY(EditAnywhere, Category = "Targeting")
 	FBlackboardKeySelector TargetActorKey;
-
-	UPROPERTY(EditAnywhere, Category = "Movement", meta = (ClampMin = "0.0"))
-	float AcceptanceRadius = 80.f;
 };

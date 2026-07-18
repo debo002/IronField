@@ -21,13 +21,13 @@ public:
 	static const FName GameplayLevelName;
 
 	// Survives level travel so the wave manager can read the mode chosen on the menu.
-	UFUNCTION(BlueprintCallable, Category = "GameInstance|RunMode")
+	UFUNCTION(BlueprintCallable, Category = "IronField|GameInstance|RunMode")
 	void SetRunMode(EIFRunMode NewRunMode);
 
-	UFUNCTION(BlueprintPure, Category = "GameInstance|RunMode")
+	UFUNCTION(BlueprintPure, Category = "IronField|GameInstance|RunMode")
 	EIFRunMode GetRunMode() const { return RunMode; }
 
 private:
-	UPROPERTY(VisibleInstanceOnly, Category = "GameInstance|RunMode")
+	UPROPERTY(VisibleInstanceOnly, Category = "IronField|GameInstance|RunMode")
 	EIFRunMode RunMode = EIFRunMode::Normal;
 };
