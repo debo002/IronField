@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.7",
+	"EngineAssociation": "5.8",
 	"Category": "",
 	"Description": "Wave-defense action game: defend the stronghold against melee and mage enemies across Normal and Unlimited runs.",
 	"Modules": [
