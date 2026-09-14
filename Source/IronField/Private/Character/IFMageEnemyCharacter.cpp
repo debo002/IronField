@@ -22,9 +22,9 @@ AIFMageEnemyCharacter::AIFMageEnemyCharacter(const FObjectInitializer& ObjectIni
 	}
 }
 
-void AIFMageEnemyCharacter::Tick(float DeltaSeconds)
+void AIFMageEnemyCharacter::Tick(float DeltaTime)
 {
-	Super::Tick(DeltaSeconds);
+	Super::Tick(DeltaTime);
 	UpdateFocusOnTarget();
 }
 

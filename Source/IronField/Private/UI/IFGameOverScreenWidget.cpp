@@ -23,6 +23,21 @@ void UIFGameOverScreenWidget::NativeConstruct()
 	ApplyResultTitle();
 }
 
+void UIFGameOverScreenWidget::NativeDestruct()
+{
+	if (RestartButton)
+	{
+		RestartButton->OnClicked.RemoveAll(this);
+	}
+
+	if (MainMenuButton)
+	{
+		MainMenuButton->OnClicked.RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
+}
+
 void UIFGameOverScreenWidget::ApplyResultTitle()
 {
 	if (!ResultTitleText)
@@ -38,12 +53,13 @@ void UIFGameOverScreenWidget::ApplyResultTitle()
 
 void UIFGameOverScreenWidget::UnpauseAndOpenLevel(FName LevelName)
 {
-	if (!GetWorld())
+	UWorld* const World = GetWorld();
+	if (!World)
 	{
 		return;
 	}
 
-	UGameplayStatics::SetGamePaused(GetWorld(), false);
+	UGameplayStatics::SetGamePaused(World, false);
 	UGameplayStatics::OpenLevel(this, LevelName);
 }
 

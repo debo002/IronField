@@ -25,15 +25,11 @@ The mesh asset must have collision geometry. Open the mesh asset and use Collisi
 
 ## 3. Player and melee-enemy weapons
 
-Each combat Blueprint needs a `Box Collision` component around the damaging part of its weapon. Assign that component to the Combat component's **Weapon Collision Box** property.
+Each combat Blueprint needs exactly one `Box Collision` around the damaging part of its weapon, parented to the weapon mesh. There is nothing to assign: combat finds the single box on its own at BeginPlay. The mage needs none of this (ranged attacks, no weapon box).
 
-For each weapon box:
+For the weapon box: Custom preset, No Collision initially (combat enables it mid-swing), Generate Overlap Events on, WorldDynamic, Pawn + Damageable Overlap, rest Ignore.
 
-1. Set **Collision Preset** to `Custom`.
-2. Set **Collision Enabled** to `No Collision` initially. Combat enables it only during the montage attack window.
-3. Enable **Generate Overlap Events**.
-4. Set its **Object Type** to `WorldDynamic`.
-5. Set responses to **Pawn** and **Damageable** to **Overlap**. Set other responses to **Ignore** unless that weapon should interact with them.
+Setup mistakes stay loud in the Output Log: no box, more than one box, or a box with no attach parent each log a warning naming the fix.
 
 The attacked player and melee enemy use their capsule (`Pawn`) collision. Do not disable collision on their capsules. This is the setting that lets the player sword hit melee enemies.
 
@@ -66,4 +62,4 @@ Open each enemy Blueprint, select its class defaults, and set **Enemy > Combat >
 1. In Play In Editor, attack a melee enemy with the player sword.
 2. Let a melee enemy approach the stronghold. Lower its `Combat Range` if the animation starts before the weapon reaches the mesh.
 3. Hit the stronghold with the player weapon and a projectile; its health should decrease.
-4. Verify the Output Log has no `has no WeaponCollisionBox assigned` warning.
+4. Verify the Output Log has neither `has no WeaponCollisionBox assigned` nor `has no attach parent` warning.

@@ -3,11 +3,11 @@
 #include "Animation/AnimInstance.h"
 #include "Combat/IFCombatTargetingUtils.h"
 #include "Components/BoxComponent.h"
+#include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/IFAnimMontageUtils.h"
 #include "Core/IFLog.h"
 #include "GameFramework/Character.h"
-#include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
 
 UIFCombatComponent::UIFCombatComponent()
@@ -151,29 +151,14 @@ void UIFCombatComponent::BeginPlay()
 	CachedMesh = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
 	StaminaComponent = Owner ? Owner->FindComponentByClass<UIFStaminaComponent>() : nullptr;
 
+	ResolveWeaponCollisionBox();
+
 	if (WeaponCollisionBox)
 	{
-		// A weapon box with no attach parent sits at the world origin and can never
-		// touch a target. Anchor it to the owner so it at least follows the fighter.
 		if (!WeaponCollisionBox->GetAttachParent())
 		{
-			UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s WeaponCollisionBox has no attach parent; auto-attaching to the root. Set the intended parent/socket in Blueprint."),
+			UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s WeaponCollisionBox has no attach parent; parent it to the weapon in Blueprint."),
 				*GetNameSafe(Owner));
-
-			if (USceneComponent* const Parent = Owner ? Owner->GetRootComponent() : nullptr)
-			{
-				WeaponCollisionBox->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform);
-			}
-		}
-
-		// Untouched UE defaults (32cm cube at the origin) can never reach a target
-		// the AI considers in range. Apply weapon defaults that cover CombatRange;
-		// any Blueprint-configured transform is respected as-is.
-		if (WeaponCollisionBox->GetRelativeLocation().IsNearlyZero()
-			&& WeaponCollisionBox->GetScaledBoxExtent().Equals(FVector(32.f), 1.f))
-		{
-			WeaponCollisionBox->SetRelativeLocation(FVector(60.f, 0.f, 0.f));
-			WeaponCollisionBox->SetBoxExtent(FVector(80.f, 60.f, 60.f));
 		}
 
 		// The box must start disabled; it is only live inside an attack window.
@@ -183,7 +168,7 @@ void UIFCombatComponent::BeginPlay()
 	}
 	else if (RequiresWeaponCollisionBox())
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has no WeaponCollisionBox assigned; attacks will not register hits."), *GetNameSafe(Owner));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has no weapon box; add one Box parented to the weapon (see Docs/CombatCollisionSetup.md)."), *GetNameSafe(Owner));
 	}
 }
 
@@ -421,6 +406,41 @@ void UIFCombatComponent::SetWeaponCollisionEnabled(bool bEnabled) const
 
 	WeaponCollisionBox->SetGenerateOverlapEvents(bEnabled);
 	WeaponCollisionBox->SetCollisionEnabled(bEnabled ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+}
+
+void UIFCombatComponent::ResolveWeaponCollisionBox()
+{
+	WeaponCollisionBox = nullptr;
+
+	const AActor* const Owner = GetOwner();
+	if (!Owner)
+	{
+		return;
+	}
+
+	// One-box convention, nothing to assign: a root-level box is almost
+	// certainly a leftover, so a parented box always wins over one.
+	TArray<UBoxComponent*> Boxes;
+	Owner->GetComponents<UBoxComponent>(Boxes);
+	for (UBoxComponent* const Box : Boxes)
+	{
+		if (Box && Box->GetAttachParent())
+		{
+			WeaponCollisionBox = Box;
+			break;
+		}
+	}
+
+	if (!WeaponCollisionBox && Boxes.IsValidIndex(0))
+	{
+		WeaponCollisionBox = Boxes[0];
+	}
+
+	if (Boxes.Num() > 1)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has %d weapon boxes; using %s. Keep exactly one."),
+			*GetNameSafe(Owner), Boxes.Num(), *GetNameSafe(WeaponCollisionBox));
+	}
 }
 
 UAnimInstance* UIFCombatComponent::GetAnimInstance() const

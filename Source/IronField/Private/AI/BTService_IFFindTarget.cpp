@@ -68,6 +68,10 @@ void UBTService_IFFindTarget::ChooseTarget(UBehaviorTreeComponent& OwnerComp) co
 
 	const AIFEnemyController* const Controller = Cast<AIFEnemyController>(OwnerComp.GetAIOwner());
 	const UIFEnemyAIData* const AIData = Controller ? Controller->GetAIData() : GetDefault<UIFEnemyAIData>();
+	if (!AIData)
+	{
+		return;
+	}
 	const float DetectionRange = AIData->PlayerDetectionRange;
 	const float SwitchMargin = AIData->TargetSwitchMargin;
 

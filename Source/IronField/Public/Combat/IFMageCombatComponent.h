@@ -37,7 +37,6 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Projectile", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float ProjectileSpawnForwardOffset = 60.f;
 
-	// Tuned down while the mage deals damage for the first time; re-tune after the re-test.
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float AttackDamage = 12.f;
 

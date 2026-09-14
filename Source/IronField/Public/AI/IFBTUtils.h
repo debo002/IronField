@@ -4,7 +4,6 @@
 #include "BehaviorTree/BehaviorTreeTypes.h"
 
 class AActor;
-class AAIController;
 class AIFEnemyCharacter;
 class UBTDecorator;
 class UBehaviorTreeComponent;

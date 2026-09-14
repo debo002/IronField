@@ -14,8 +14,14 @@ namespace IFPlayerControllerUtils
 
 		Widget->AddToViewport();
 
+		TSharedPtr<SWidget> FocusWidget = Widget->TakeWidget();
+		if (!FocusWidget.IsValid())
+		{
+			return;
+		}
+
 		FInputModeUIOnly InputMode;
-		InputMode.SetWidgetToFocus(Widget->TakeWidget());
+		InputMode.SetWidgetToFocus(FocusWidget.ToSharedRef());
 		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 		Controller->SetInputMode(InputMode);
 		Controller->bShowMouseCursor = true;

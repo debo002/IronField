@@ -28,6 +28,21 @@ void UIFMainMenuWidget::NativeConstruct()
 	}
 }
 
+void UIFMainMenuWidget::NativeDestruct()
+{
+	if (NormalModeButton)
+	{
+		NormalModeButton->OnClicked.RemoveAll(this);
+	}
+
+	if (UnlimitedModeButton)
+	{
+		UnlimitedModeButton->OnClicked.RemoveAll(this);
+	}
+
+	Super::NativeDestruct();
+}
+
 void UIFMainMenuWidget::HandleNormalModeClicked()
 {
 	StartRunAndOpenGameplayLevel(EIFRunMode::Normal);

@@ -138,7 +138,8 @@ private:
 	TSubclassOf<UDamageType> ActiveDamageTypeClass;
 	TSet<TWeakObjectPtr<AActor>> RegisteredAttackHits;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "IronField|Combat|Weapon", meta = (AllowPrivateAccess = "true"))
+	// Runtime cache for the fighter's single weapon box, resolved in BeginPlay.
+	// Not editor-visible: one box per fighter by convention, so no picker.
 	TObjectPtr<UBoxComponent> WeaponCollisionBox;
 
 	UFUNCTION()
@@ -148,5 +149,6 @@ private:
 	bool TryRegisterAttackHit(AActor* TargetActor);
 	/** Health component only when attack collision is active and the target is legally hittable. */
 	UIFHealthComponent* GetValidActiveAttackTargetHealth(AActor* TargetActor) const;
+	void ResolveWeaponCollisionBox();
 	void SetWeaponCollisionEnabled(bool bEnabled) const;
 };

@@ -124,6 +124,10 @@ void AIFEnemyController::HandleOwnCombatStateChanged(ECombatState PreviousState,
 		{
 			LastAttackEndedTime = World->GetTimeSeconds();
 			const UIFEnemyAIData* const Data = GetAIData();
+			if (!Data)
+			{
+				return;
+			}
 			const float MinCooldown = FMath::Min(Data->MinReattackCooldownSeconds, Data->MaxReattackCooldownSeconds);
 			const float MaxCooldown = FMath::Max(Data->MinReattackCooldownSeconds, Data->MaxReattackCooldownSeconds);
 			CurrentReattackCooldownSeconds = FMath::RandRange(MinCooldown, MaxCooldown);

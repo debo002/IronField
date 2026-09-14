@@ -47,6 +47,7 @@ protected:
 	FLinearColor DefeatColor = FLinearColor(0.85f, 0.25f, 0.25f);
 
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 	UFUNCTION()
 	void HandleRestartClicked();

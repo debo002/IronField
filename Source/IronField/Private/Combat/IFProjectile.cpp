@@ -27,6 +27,16 @@ void AIFProjectile::BeginPlay()
 	SetLifeSpan(LifeSpanSeconds);
 }
 
+void AIFProjectile::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (CollisionSphere)
+	{
+		CollisionSphere->OnComponentBeginOverlap.RemoveAll(this);
+		CollisionSphere->OnComponentHit.RemoveAll(this);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 void AIFProjectile::InitializeProjectile(AActor* InInstigator, float InDamage, TSubclassOf<UDamageType> InDamageTypeClass)
 {
 	ProjectileInstigator = InInstigator;
@@ -34,7 +44,7 @@ void AIFProjectile::InitializeProjectile(AActor* InInstigator, float InDamage, T
 	DamageTypeClass = InDamageTypeClass;
 	bInitialized = true;
 
-	if (InInstigator)
+	if (InInstigator && CollisionSphere)
 	{
 		CollisionSphere->IgnoreActorWhenMoving(InInstigator, true);
 	}

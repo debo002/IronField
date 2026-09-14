@@ -30,7 +30,6 @@ public:
 	UFUNCTION(BlueprintPure, Category = "IronField|Character|State")
 	bool IsDead() const;
 
-
 	UFUNCTION(BlueprintPure, Category = "IronField|Character|State")
 	bool IsAttacking() const;
 

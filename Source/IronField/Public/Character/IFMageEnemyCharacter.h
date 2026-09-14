@@ -12,7 +12,7 @@ class IRONFIELD_API AIFMageEnemyCharacter : public AIFEnemyCharacter
 public:
 	AIFMageEnemyCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	virtual void Tick(float DeltaSeconds) override;
+	virtual void Tick(float DeltaTime) override;
 
 protected:
 	virtual void OnDeathStarted() override;

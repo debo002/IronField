@@ -66,9 +66,9 @@ void UIFMageCombatComponent::LaunchProjectileAttack()
 	float ClearanceRadius = ProjectileSpawnForwardOffset;
 	if (const UCapsuleComponent* const OwnerCapsule = Owner->FindComponentByClass<UCapsuleComponent>())
 	{
-		ClearanceRadius = OwnerCapsule->GetScaledCapsuleRadius()
-			+ ProjectileClass->GetDefaultObject<AIFProjectile>()->GetCollisionSphereRadius()
-			+ 20.f;
+		const AIFProjectile* const ProjectileCDO = ProjectileClass->GetDefaultObject<AIFProjectile>();
+		const float ProjectileRadius = ProjectileCDO ? ProjectileCDO->GetCollisionSphereRadius() : 0.f;
+		ClearanceRadius = OwnerCapsule->GetScaledCapsuleRadius() + ProjectileRadius + 20.f;
 	}
 
 	const FVector Forward2D = Owner->GetActorForwardVector().GetSafeNormal2D();

@@ -23,6 +23,7 @@ public:
 	float GetCollisionSphereRadius() const { return CollisionSphere ? CollisionSphere->GetUnscaledSphereRadius() : 0.f; }
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "IronField|Projectile|Components")

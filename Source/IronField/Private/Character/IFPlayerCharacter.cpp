@@ -325,7 +325,7 @@ void AIFPlayerCharacter::OnReviveFinished()
 
 void AIFPlayerCharacter::TickCameraTransition(float DeltaTime)
 {
-	if (!bIsCameraTransitioning)
+	if (!bIsCameraTransitioning || !CameraBoom)
 	{
 		return;
 	}
