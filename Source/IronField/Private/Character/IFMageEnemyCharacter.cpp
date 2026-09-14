@@ -4,7 +4,6 @@
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Combat/IFMageCombatComponent.h"
-#include "Components/StaticMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 AIFMageEnemyCharacter::AIFMageEnemyCharacter(const FObjectInitializer& ObjectInitializer)
@@ -14,29 +13,24 @@ AIFMageEnemyCharacter::AIFMageEnemyCharacter(const FObjectInitializer& ObjectIni
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	CombatRange = 900.f;
-	ChaseSpeed = 320.f;
-	AttackingSpeed = 200.f;
+	CombatRange = 850.f;
 
 	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 	{
 		Movement->bOrientRotationToMovement = false;
 		Movement->bUseControllerDesiredRotation = true;
-		Movement->RotationRate = FRotator(0.f, 220.f, 0.f);
-		Movement->MaxAcceleration = 600.f;
-		Movement->BrakingDecelerationWalking = 600.f;
 	}
-
-	StaffMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Staff"));
-	StaffMesh->SetupAttachment(GetMesh(), TEXT("weapon_r"));
-	StaffMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	StaffMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
 }
 
 void AIFMageEnemyCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
 	UpdateFocusOnTarget();
+}
+
+void AIFMageEnemyCharacter::OnDeathStarted()
+{
+	SetActorTickEnabled(false);
 }
 
 void AIFMageEnemyCharacter::UpdateFocusOnTarget()
@@ -59,11 +53,22 @@ void AIFMageEnemyCharacter::UpdateFocusOnTarget()
 	}
 
 	const AIFEnemyController* const EnemyController = Cast<AIFEnemyController>(AIController);
-	const FName TargetKey = EnemyController ? EnemyController->GetTargetActorKeyName() : FName(TEXT("TargetActor"));
-	AActor* const Target = Cast<AActor>(Blackboard->GetValueAsObject(TargetKey));
-	if (Target)
+	if (!EnemyController)
 	{
-		AIController->SetFocus(Target);
+		return;
+	}
+
+	AActor* const DesiredFocus = Cast<AActor>(Blackboard->GetValueAsObject(EnemyController->GetTargetActorKeyName()));
+
+	if (DesiredFocus == CurrentFocusTarget.Get())
+	{
+		return;
+	}
+
+	CurrentFocusTarget = DesiredFocus;
+	if (DesiredFocus)
+	{
+		AIController->SetFocus(DesiredFocus);
 	}
 	else
 	{

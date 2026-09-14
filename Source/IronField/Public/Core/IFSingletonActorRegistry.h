@@ -12,7 +12,7 @@ namespace IFSingletonActorRegistry
 		if (Slot && Slot != Instance)
 		{
 			UE_LOG(LogIronField, Warning,
-				TEXT("[IF-Subsystem] Register%s called while a different instance (%s) is already registered. Overwriting."),
+				TEXT("[IF-Subsystem] Register %s called while a different instance (%s) is already registered. Overwriting."),
 				Label, *GetNameSafe(Slot.Get()));
 		}
 		Slot = Instance;

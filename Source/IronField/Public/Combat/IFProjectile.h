@@ -1,14 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Components/SphereComponent.h"
 #include "GameFramework/Actor.h"
 #include "IFProjectile.generated.h"
 
 class UDamageType;
-class UNiagaraSystem;
 class UProjectileMovementComponent;
 class USphereComponent;
-class UStaticMeshComponent;
 
 UCLASS()
 class IRONFIELD_API AIFProjectile : public AActor
@@ -20,30 +19,27 @@ public:
 
 	void InitializeProjectile(AActor* InInstigator, float InDamage, TSubclassOf<UDamageType> InDamageTypeClass);
 
+	/** Unscaled collision radius, used to spawn clear of the shooter's collision. */
+	float GetCollisionSphereRadius() const { return CollisionSphere ? CollisionSphere->GetUnscaledSphereRadius() : 0.f; }
+
 	virtual void BeginPlay() override;
 
 protected:
-	UPROPERTY(VisibleAnywhere, Category = "Projectile")
+	UPROPERTY(VisibleAnywhere, Category = "IronField|Projectile|Components")
 	TObjectPtr<USphereComponent> CollisionSphere;
 
-	UPROPERTY(VisibleAnywhere, Category = "Projectile")
-	TObjectPtr<UStaticMeshComponent> MeshComponent;
-
-	UPROPERTY(VisibleAnywhere, Category = "Projectile")
+	UPROPERTY(VisibleAnywhere, Category = "IronField|Projectile|Components")
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
 
-	/** Arcade-slow default so projectiles are visibly dodgeable. */
-	UPROPERTY(EditDefaultsOnly, Category = "Projectile", meta = (ClampMin = "0.0"))
+	/** Arcade-slow default so projectiles stay visibly dodgeable. */
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Movement", meta = (ClampMin = "0.0"))
 	float ProjectileSpeed = 700.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Projectile", meta = (ClampMin = "0.0"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Movement", meta = (ClampMin = "0.0"))
 	float ProjectileGravityScale = 0.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Projectile", meta = (ClampMin = "0.1"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Lifetime", meta = (ClampMin = "0.1"))
 	float LifeSpanSeconds = 5.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "VFX")
-	TObjectPtr<UNiagaraSystem> ProjectileVFX;
 
 private:
 	UPROPERTY(Transient)
@@ -56,4 +52,9 @@ private:
 
 	UFUNCTION()
 	void HandleSphereBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
+
+	UFUNCTION()
+	void HandleSphereHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+
+	void HandleImpact(AActor* OtherActor);
 };

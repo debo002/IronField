@@ -47,5 +47,5 @@ bool UBTDecorator_IFHasLineOfSight::CalculateRawConditionValue(UBehaviorTreeComp
 	const FVector Start = ControlledPawn->GetActorLocation() + HeightOffset;
 	const FVector End = TargetActor->GetActorLocation() + HeightOffset;
 
-	return !World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params);
+	return !World->LineTraceSingleByChannel(Hit, Start, End, TraceChannel, Params);
 }

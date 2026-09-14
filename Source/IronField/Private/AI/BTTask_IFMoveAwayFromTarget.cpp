@@ -3,6 +3,7 @@
 #include "AIController.h"
 #include "AI/IFBTUtils.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
+#include "Character/IFEnemyCharacter.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationSystem.h"
 
@@ -14,12 +15,6 @@ namespace
 		float TimeSinceRepath = 0.f;
 		bool bHasDestination = false;
 	};
-
-	// Finish slightly inside the ideal range so we don't thrash at the boundary.
-	constexpr float SuccessRangeTolerance = 0.95f;
-	constexpr float RepathInterval = 0.25f;
-	constexpr float DestinationDriftThreshold = 120.f;
-	constexpr float AcceptanceRadius = 50.f;
 
 	FVector ComputeRetreatDirection(const AActor* Enemy, const AActor* Target)
 	{
@@ -58,14 +53,14 @@ namespace
 		return Desired;
 	}
 
-	bool RequestRetreatMove(AAIController* AIController, AIFEnemyCharacter* Enemy, AActor* Target, FIFMoveAwayMemory* Memory)
+	bool RequestRetreatMove(AAIController* AIController, AIFEnemyCharacter* Enemy, AActor* Target, FIFMoveAwayMemory* Memory, float InAcceptanceRadius)
 	{
 		const float Range = Enemy->GetCombatRange();
 		const FVector Away = ComputeRetreatDirection(Enemy, Target);
 		const FVector Desired = Target->GetActorLocation() + Away * Range;
 		const FVector Destination = ProjectRetreatDestination(AIController->GetWorld(), Desired);
 
-		const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(Destination, AcceptanceRadius, false);
+		const EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(Destination, InAcceptanceRadius, false);
 		if (Result == EPathFollowingRequestResult::Failed)
 		{
 			return false;
@@ -110,7 +105,7 @@ EBTNodeResult::Type UBTTask_IFMoveAwayFromTarget::ExecuteTask(UBehaviorTreeCompo
 	}
 
 	FIFMoveAwayMemory* const Memory = reinterpret_cast<FIFMoveAwayMemory*>(NodeMemory);
-	if (!RequestRetreatMove(AIController, Enemy, Target, Memory))
+	if (!RequestRetreatMove(AIController, Enemy, Target, Memory, AcceptanceRadius))
 	{
 		return EBTNodeResult::Failed;
 	}
@@ -154,7 +149,7 @@ void UBTTask_IFMoveAwayFromTarget::TickTask(UBehaviorTreeComponent& OwnerComp, u
 
 	if ((!bIsMoving || bDestinationDrifted) && Memory->TimeSinceRepath >= RepathInterval)
 	{
-		if (!RequestRetreatMove(AIController, Enemy, Target, Memory))
+		if (!RequestRetreatMove(AIController, Enemy, Target, Memory, AcceptanceRadius))
 		{
 			FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
 		}

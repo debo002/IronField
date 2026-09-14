@@ -10,18 +10,14 @@ public class IronField : ModuleRules
 			"Core",
 			"CoreUObject",
 			"Engine",
-			"InputCore",
 			"EnhancedInput",
 			"UMG",
-			"Niagara",
-			"NavigationSystem",
 			"AIModule"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { });
-
-		PublicIncludePaths.AddRange(new string[] {
-			"IronField/Public"
+		PrivateDependencyModuleNames.AddRange(new string[] {
+			"NavigationSystem"
 		});
+
 	}
 }

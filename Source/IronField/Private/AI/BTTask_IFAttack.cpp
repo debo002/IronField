@@ -71,3 +71,21 @@ void UBTTask_IFAttack::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMe
 		FinishLatentTask(OwnerComp, Combat ? EBTNodeResult::Succeeded : EBTNodeResult::Failed);
 	}
 }
+
+void UBTTask_IFAttack::OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTNodeResult::Type TaskResult)
+{
+	Super::OnTaskFinished(OwnerComp, NodeMemory, TaskResult);
+
+	// An aborted attack (BT retarget) must not leave the montage playing with
+	// stale collision state; a finished one is already idle, making this a no-op.
+	if (TaskResult == EBTNodeResult::Aborted)
+	{
+		if (AIFEnemyController* const MutableController = Cast<AIFEnemyController>(OwnerComp.GetAIOwner()))
+		{
+			if (UIFCombatComponent* const MutableCombat = MutableController->GetControlledCombatComponent())
+			{
+				MutableCombat->CancelAttack();
+			}
+		}
+	}
+}

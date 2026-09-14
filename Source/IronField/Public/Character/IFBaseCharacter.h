@@ -7,7 +7,6 @@
 class UAnimInstance;
 class UIFCombatComponent;
 class UIFHealthComponent;
-class UIFStaminaComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterDied, AIFBaseCharacter*, Character);
 
@@ -17,27 +16,22 @@ class IRONFIELD_API AIFBaseCharacter : public ACharacter
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(BlueprintAssignable, Category = "Characters|Events")
+	UPROPERTY(BlueprintAssignable, Category = "IronField|Character|Events")
 	FOnCharacterDied OnCharacterDied;
 
 	AIFBaseCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
-	UFUNCTION(BlueprintPure, Category = "Characters|Components")
+	UFUNCTION(BlueprintPure, Category = "IronField|Character|Components")
 	UIFHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
-	UFUNCTION(BlueprintPure, Category = "Characters|Components")
-	UIFStaminaComponent* GetStaminaComponent() const { return StaminaComponent; }
-
-	UFUNCTION(BlueprintPure, Category = "Characters|Components")
+	UFUNCTION(BlueprintPure, Category = "IronField|Character|Components")
 	UIFCombatComponent* GetCombatComponent() const { return CombatComponent; }
 
-	UFUNCTION(BlueprintPure, Category = "Characters|State")
+	UFUNCTION(BlueprintPure, Category = "IronField|Character|State")
 	bool IsDead() const;
 
-	UFUNCTION(BlueprintPure, Category = "Characters|State")
-	bool IsBlocking() const;
 
-	UFUNCTION(BlueprintPure, Category = "Characters|State")
+	UFUNCTION(BlueprintPure, Category = "IronField|Character|State")
 	bool IsAttacking() const;
 
 	virtual void BeginPlay() override;
@@ -45,33 +39,25 @@ public:
 	virtual void Landed(const FHitResult& Hit) override;
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "Characters|Animation")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Character|Animation")
 	float DeathMontageBlendOutTime = 0.15f;
 
 	virtual void OnDeathStarted() {}
 
-	virtual void OnDeathSequenceStarted() {}
-
-	virtual void OnStaminaDepleted() {}
-
 	UAnimInstance* GetMeshAnimInstance() const;
+
+	/** Restores collision, movement, and the death gate so the character can live (and die) again. */
+	void RestoreAliveState();
 
 	void StopMovementForDeath();
 	void DisableCollisionForDeath();
-	void RestoreCollisionAfterDeath();
 
 private:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Characters|Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Character|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UIFHealthComponent> HealthComponent;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Characters|Components", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UIFStaminaComponent> StaminaComponent;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Characters|Components", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Character|Components", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UIFCombatComponent> CombatComponent;
-
-	UFUNCTION()
-	void HandleStaminaDepleted();
 
 	UFUNCTION()
 	void HandleDeath();
@@ -79,14 +65,12 @@ private:
 	void BindGameplayDelegates();
 	void UnbindGameplayDelegates();
 
-	// Set to true the moment HandleDeath() begins — single re-entrancy guard owned by the character.
+	// Death re-entrancy guard; cleared by RestoreAliveState so a revived character can die again.
 	bool bHasDied = false;
 
-	// Original collision profile names captured in BeginPlay; restored verbatim by RestoreCollisionAfterDeath().
+	// Live settings captured in BeginPlay and restored verbatim on revive.
 	FName CapsuleCollisionProfile;
 	FName MeshCollisionProfile;
-
-	// Original rotation settings captured in BeginPlay; restored by RestoreCollisionAfterDeath().
 	bool bSavedOrientRotationToMovement = false;
 	bool bSavedUseControllerDesiredRotation = false;
 };

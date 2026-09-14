@@ -18,6 +18,6 @@ protected:
 	virtual void TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 	virtual bool CalculateRawConditionValue(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) const override;
 
-	UPROPERTY(EditAnywhere, Category = "Targeting")
+	UPROPERTY(EditAnywhere, Category = "IronField|AI|Targeting")
 	FBlackboardKeySelector TargetActorKey;
 };

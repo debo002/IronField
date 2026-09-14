@@ -7,7 +7,7 @@
 class AIFPlayerCharacter;
 class AIFBaseCharacter;
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerDied);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerDowned);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaveStarted, int32, WaveNumber);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaveCompleted, int32, WaveNumber);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemiesAliveCountChanged, int32, NewCount);
@@ -18,10 +18,10 @@ struct FEnemyGroupDefinition
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Config")
 	TSubclassOf<AIFBaseCharacter> EnemyClass;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave", meta = (ClampMin = "1"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Config", meta = (ClampMin = "1"))
 	int32 EnemyCount = 5;
 };
 
@@ -30,7 +30,7 @@ struct FWaveDefinition
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Config")
 	TArray<FEnemyGroupDefinition> EnemyGroups;
 };
 
@@ -42,8 +42,10 @@ class IRONFIELD_API AIFWaveManager : public AActor
 public:
 	AIFWaveManager();
 
+	// Broadcast each time the player's health is depleted. The player revives afterwards,
+	// so enemies use this to drop their current target, not to end the run.
 	UPROPERTY(BlueprintAssignable, Category = "IronField|Wave|Events")
-	FOnPlayerDied OnPlayerDied;
+	FOnPlayerDowned OnPlayerDowned;
 
 	UPROPERTY(BlueprintAssignable, Category = "IronField|Wave|Events")
 	FOnWaveStarted OnWaveStarted;
@@ -72,7 +74,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "1.0"))
 	float UnlimitedEnemyCountScaleFactor = 1.25f;
 
-	/** Random XY offset applied around spawn points so enemies don't stack. */
+	/** Random XY offset applied around spawn points so enemies do not stack on one spot. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
 	float SpawnLocationJitterRadius = 40.f;
 
@@ -82,19 +84,15 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Wave|State")
 	int32 EnemiesSpawnedSoFar = 0;
 
-	// 1-based wave number for UI. Derived from zero-based CurrentWaveIndex.
-	UFUNCTION(BlueprintPure, Category = "IronField|Wave|State")
-	int32 GetCurrentWave() const { return CurrentWaveIndex + 1; }
-
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Wave|State")
 	int32 EnemiesAlive = 0;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Wave|State")
 	bool bIsWaveActive = false;
 
-	// True between OnWaveCompleted and BeginNextWave — gates a future shop/rest phase.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Wave|State")
-	bool bWaitingForNextWave = false;
+	// 1-based wave number for UI. Derived from the zero-based CurrentWaveIndex.
+	UFUNCTION(BlueprintPure, Category = "IronField|Wave|State")
+	int32 GetCurrentWave() const { return CurrentWaveIndex + 1; }
 
 	UFUNCTION(BlueprintPure, Category = "IronField|Wave|Targeting")
 	AActor* GetPlayerActor() const;
@@ -104,13 +102,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "IronField|Wave|Actions")
 	void StartNextWave();
-
-	// Call after bWaitingForNextWave becomes true (e.g. from shop/rest UI) to start the next wave.
-	UFUNCTION(BlueprintCallable, Category = "IronField|Wave|Actions")
-	void BeginNextWave();
-
-	UFUNCTION(BlueprintCallable, Category = "IronField|Wave|Actions")
-	void CleanupWaveCorpses();
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -122,6 +113,9 @@ private:
 	UPROPERTY(Transient)
 	TArray<TObjectPtr<AIFBaseCharacter>> SpawnedEnemies;
 
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<AActor>> SpawnPoints;
+
 	int32 CurrentWaveIndex = -1;
 
 	void NotifyEnemySpawned(AIFBaseCharacter* Enemy);
@@ -130,7 +124,12 @@ private:
 	FWaveDefinition BuildUnlimitedWave(int32 WaveIndex) const;
 	void BeginWaveFromDefinition(const FWaveDefinition& Wave);
 	void CompleteWaveIfFinished();
+	void CleanupWaveCorpses();
 	void UnbindAllSpawnedEnemyDelegates();
+	void CacheSpawnPoints();
+
+	UFUNCTION()
+	void HandlePlayerRegistered(AIFPlayerCharacter* Player);
 
 	UFUNCTION()
 	void HandlePlayerHealthDepleted();
@@ -138,11 +137,6 @@ private:
 	UFUNCTION()
 	void HandleEnemyDied(AIFBaseCharacter* DeadEnemy);
 
-	UFUNCTION()
-	void HandleWaveCompleted(int32 CompletedWaveNumber);
-
-	void InitializePlayerBindings();
-	void CachePlayer();
-	void BindPlayerDelegates();
-	void UnbindPlayerDelegates();
+	void BindPlayer(AIFPlayerCharacter* Player);
+	void UnbindPlayer();
 };

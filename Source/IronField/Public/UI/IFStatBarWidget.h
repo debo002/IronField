@@ -8,7 +8,7 @@ class UProgressBar;
 
 /**
  * Single progress bar that smoothly interpolates toward a target percent.
- * Call SetTargetPercent from the owning HUD; do not drive this widget from Tick outside.
+ * Driven exclusively by the owning HUD through SetTargetPercent.
  */
 UCLASS()
 class IRONFIELD_API UIFStatBarWidget : public UUserWidget
@@ -18,19 +18,18 @@ class IRONFIELD_API UIFStatBarWidget : public UUserWidget
 public:
 	UIFStatBarWidget(const FObjectInitializer& ObjectInitializer);
 
-	/** Updates the interpolation target only. Displayed fill is advanced in NativeTick. */
-	UFUNCTION(BlueprintCallable, Category = "IronField|StatBar")
+	/** Updates the interpolation target only; the displayed fill advances in NativeTick. */
+	UFUNCTION(BlueprintCallable, Category = "IronField|UI|StatBar")
 	void SetTargetPercent(float NewTargetPercent);
 
 protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UProgressBar> ProgressBar;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|StatBar")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|UI|StatBar")
 	FLinearColor FillColor = FLinearColor::White;
 
-	/** Frame-rate independent ease speed toward the target percent (FInterpTo). */
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|StatBar", meta = (ClampMin = "0.0"))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|UI|StatBar", meta = (ClampMin = "0.0"))
 	float InterpSpeed = 8.f;
 
 	virtual void NativeConstruct() override;

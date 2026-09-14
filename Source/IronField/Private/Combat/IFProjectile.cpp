@@ -1,10 +1,10 @@
 #include "Combat/IFProjectile.h"
 
 #include "Combat/IFCombatTargetingUtils.h"
+#include "Core/IFLog.h"
 #include "Components/SphereComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/ProjectileMovementComponent.h"
-#include "NiagaraFunctionLibrary.h"
 
 AIFProjectile::AIFProjectile()
 {
@@ -12,38 +12,19 @@ AIFProjectile::AIFProjectile()
 
 	CollisionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionSphere"));
 	SetRootComponent(CollisionSphere);
-	CollisionSphere->InitSphereRadius(8.f);
-
-	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Mesh"));
-	MeshComponent->SetupAttachment(CollisionSphere);
 
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovement"));
 	ProjectileMovement->UpdatedComponent = CollisionSphere;
-	ProjectileMovement->InitialSpeed = ProjectileSpeed;
-	ProjectileMovement->MaxSpeed = ProjectileSpeed;
-	ProjectileMovement->ProjectileGravityScale = ProjectileGravityScale;
 	ProjectileMovement->bRotationFollowsVelocity = true;
-	ProjectileMovement->bShouldBounce = false;
 
 	CollisionSphere->OnComponentBeginOverlap.AddDynamic(this, &AIFProjectile::HandleSphereBeginOverlap);
+	CollisionSphere->OnComponentHit.AddDynamic(this, &AIFProjectile::HandleSphereHit);
 }
 
 void AIFProjectile::BeginPlay()
 {
 	Super::BeginPlay();
 	SetLifeSpan(LifeSpanSeconds);
-
-	if (ProjectileVFX)
-	{
-		UNiagaraFunctionLibrary::SpawnSystemAttached(
-			ProjectileVFX,
-			GetRootComponent(),
-			NAME_None,
-			FVector::ZeroVector,
-			FRotator::ZeroRotator,
-			EAttachLocation::KeepRelativeOffset,
-			true);
-	}
 }
 
 void AIFProjectile::InitializeProjectile(AActor* InInstigator, float InDamage, TSubclassOf<UDamageType> InDamageTypeClass)
@@ -58,6 +39,8 @@ void AIFProjectile::InitializeProjectile(AActor* InInstigator, float InDamage, T
 		CollisionSphere->IgnoreActorWhenMoving(InInstigator, true);
 	}
 
+	// Movement values are applied here, not just in the constructor: Blueprint overrides
+	// of the EditDefaultsOnly properties only exist after the constructor has run.
 	if (ProjectileMovement)
 	{
 		ProjectileMovement->InitialSpeed = ProjectileSpeed;
@@ -69,13 +52,44 @@ void AIFProjectile::InitializeProjectile(AActor* InInstigator, float InDamage, T
 
 void AIFProjectile::HandleSphereBeginOverlap(UPrimitiveComponent*, AActor* OtherActor, UPrimitiveComponent*, int32, bool, const FHitResult&)
 {
-	if (bHasHit || !bInitialized || !OtherActor || OtherActor == this || OtherActor == ProjectileInstigator)
+	HandleImpact(OtherActor);
+}
+
+void AIFProjectile::HandleSphereHit(UPrimitiveComponent*, AActor* OtherActor, UPrimitiveComponent*, FVector, const FHitResult&)
+{
+	HandleImpact(OtherActor);
+}
+
+void AIFProjectile::HandleImpact(AActor* OtherActor)
+{
+	if (bHasHit || !OtherActor || OtherActor == this || OtherActor == ProjectileInstigator)
+	{
+		return;
+	}
+
+	if (!bInitialized)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s impacted %s without InitializeProjectile; destroying."),
+			*GetNameSafe(this), *GetNameSafe(OtherActor));
+		bHasHit = true;
+		Destroy();
+		return;
+	}
+
+	if (Cast<AIFProjectile>(OtherActor))
 	{
 		return;
 	}
 
 	if (!IFCombatTargetingUtils::GetValidAttackTargetHealth(ProjectileInstigator, OtherActor))
 	{
+		// Pawns pass through (no friendly fire, corpses never eat shots);
+		// anything else is geometry and must consume the projectile.
+		if (!Cast<APawn>(OtherActor))
+		{
+			bHasHit = true;
+			Destroy();
+		}
 		return;
 	}
 

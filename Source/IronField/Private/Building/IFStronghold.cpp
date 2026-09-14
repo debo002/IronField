@@ -1,9 +1,7 @@
 #include "Building/IFStronghold.h"
 
-#include "Components/SphereComponent.h"
 #include "Core/IFStrongholdSubsystem.h"
-#include "Kismet/GameplayStatics.h"
-#include "NiagaraFunctionLibrary.h"
+#include "Engine/World.h"
 #include "Stats/IFHealthComponent.h"
 
 AIFStronghold::AIFStronghold()
@@ -16,10 +14,6 @@ AIFStronghold::AIFStronghold()
 	MeshComponent->SetupAttachment(RootComponent);
 	MeshComponent->SetCanEverAffectNavigation(false);
 
-	HitboxComponent = CreateDefaultSubobject<USphereComponent>(TEXT("HitboxComponent"));
-	HitboxComponent->SetupAttachment(RootComponent);
-	HitboxComponent->SetSphereRadius(200.f);
-
 	HealthComponent = CreateDefaultSubobject<UIFHealthComponent>(TEXT("HealthComponent"));
 }
 
@@ -29,7 +23,6 @@ void AIFStronghold::BeginPlay()
 
 	if (HealthComponent)
 	{
-		HealthComponent->OnHealthChanged.AddDynamic(this, &AIFStronghold::HandleHealthChanged);
 		HealthComponent->OnHealthDepleted.AddDynamic(this, &AIFStronghold::HandleDeath);
 	}
 
@@ -46,7 +39,6 @@ void AIFStronghold::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (HealthComponent)
 	{
-		HealthComponent->OnHealthChanged.RemoveAll(this);
 		HealthComponent->OnHealthDepleted.RemoveAll(this);
 	}
 
@@ -61,50 +53,20 @@ void AIFStronghold::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void AIFStronghold::HandleHealthChanged(float Percent)
-{
-	// Skip BeginPlay full-health broadcast and death (0%).
-	if (Percent <= 0.f || FMath::IsNearlyEqual(Percent, 1.f))
-	{
-		return;
-	}
-
-	PlayHitFeedback(GetActorLocation());
-}
-
 void AIFStronghold::HandleDeath()
 {
-	PlayHitFeedback(GetActorLocation());
 	HandleDestruction();
-}
-
-void AIFStronghold::PlayHitFeedback(const FVector& Location)
-{
-	if (HitSound)
-	{
-		UGameplayStatics::PlaySoundAtLocation(this, HitSound, Location);
-	}
-
-	if (HitVFX)
-	{
-		UNiagaraFunctionLibrary::SpawnSystemAtLocation(this, HitVFX, Location, FRotator::ZeroRotator);
-	}
 }
 
 void AIFStronghold::HandleDestruction()
 {
 	OnStrongholdDestroyed.Broadcast(this);
 
-	// Component-level off for mesh/hitbox queries, plus actor-level override so nothing re-enables mid-frame.
+	// Disable the visible mesh's collision when the stronghold is destroyed.
 	if (MeshComponent)
 	{
 		MeshComponent->SetVisibility(false);
 		MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	}
-
-	if (HitboxComponent)
-	{
-		HitboxComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	}
 
 	SetActorEnableCollision(false);

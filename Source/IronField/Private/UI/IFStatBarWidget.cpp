@@ -1,6 +1,7 @@
 #include "UI/IFStatBarWidget.h"
 
 #include "Components/ProgressBar.h"
+#include "Core/IFLog.h"
 
 UIFStatBarWidget::UIFStatBarWidget(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -30,6 +31,7 @@ void UIFStatBarWidget::NativeConstruct()
 
 	if (!ProgressBar)
 	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-UI] ProgressBar BindWidget is missing; the stat bar will not update."));
 		return;
 	}
 

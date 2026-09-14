@@ -1,13 +1,13 @@
 #include "UI/IFHUD.h"
 
 #include "Building/IFStronghold.h"
-#include "Character/IFBaseCharacter.h"
+#include "Character/IFPlayerCharacter.h"
 #include "Core/IFLog.h"
+#include "Core/IFPlayerSubsystem.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Engine/World.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
-#include "TimerManager.h"
 #include "UI/IFStatBarWidget.h"
 
 void UIFHUD::NativeConstruct()
@@ -16,10 +16,35 @@ void UIFHUD::NativeConstruct()
 
 	BindPlayerStatBars();
 
-	// Stronghold registers during its own BeginPlay; HUD may construct first from the player controller.
-	if (UWorld* const World = GetWorld())
+	UWorld* const World = GetWorld();
+	if (!World)
 	{
-		World->GetTimerManager().SetTimerForNextTick(FTimerDelegate::CreateUObject(this, &UIFHUD::BindStrongholdStatBar));
+		return;
+	}
+
+	if (!bPlayerBound)
+	{
+		if (UIFPlayerSubsystem* const PlayerSubsystem = World->GetSubsystem<UIFPlayerSubsystem>())
+		{
+			PlayerSubsystem->OnPlayerRegistered.AddDynamic(this, &UIFHUD::HandlePlayerRegistered);
+		}
+	}
+
+	UIFStrongholdSubsystem* const Subsystem = World->GetSubsystem<UIFStrongholdSubsystem>();
+	if (!Subsystem)
+	{
+		return;
+	}
+
+	// The HUD normally constructs before level actors begin play, so the stronghold
+	// usually arrives through the registration delegate rather than the direct path.
+	if (AIFStronghold* const Stronghold = Subsystem->GetStronghold())
+	{
+		BindStrongholdStatBar(Stronghold);
+	}
+	else
+	{
+		Subsystem->OnStrongholdRegistered.AddDynamic(this, &UIFHUD::HandleStrongholdRegistered);
 	}
 }
 
@@ -27,14 +52,27 @@ void UIFHUD::NativeDestruct()
 {
 	if (UWorld* const World = GetWorld())
 	{
-		World->GetTimerManager().ClearAllTimersForObject(this);
+		if (UIFStrongholdSubsystem* const Subsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
+		{
+			Subsystem->OnStrongholdRegistered.RemoveDynamic(this, &UIFHUD::HandleStrongholdRegistered);
+		}
+
+		if (UIFPlayerSubsystem* const PlayerSubsystem = World->GetSubsystem<UIFPlayerSubsystem>())
+		{
+			PlayerSubsystem->OnPlayerRegistered.RemoveDynamic(this, &UIFHUD::HandlePlayerRegistered);
+		}
 	}
 
 	UnbindAllSources();
 	Super::NativeDestruct();
 }
 
-void UIFHUD::BindPlayerStatBars()
+void UIFHUD::HandlePlayerRegistered(AIFPlayerCharacter* Player)
+{
+	BindPlayerStatBars(Player);
+}
+
+void UIFHUD::BindPlayerStatBars(AIFPlayerCharacter* InPlayer)
 {
 	if (!PlayerHealthBar || !PlayerStaminaBar)
 	{
@@ -42,80 +80,86 @@ void UIFHUD::BindPlayerStatBars()
 		return;
 	}
 
-	AIFBaseCharacter* const Player = Cast<AIFBaseCharacter>(GetOwningPlayerPawn());
+	AIFPlayerCharacter* Player = InPlayer;
 	if (!Player)
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] No owning player pawn (AIFBaseCharacter); player bars not bound."));
+		Player = Cast<AIFPlayerCharacter>(GetOwningPlayerPawn());
+	}
+	if (!Player)
+	{
+		if (const UWorld* const World = GetWorld())
+		{
+			if (const UIFPlayerSubsystem* const Subsystem = World->GetSubsystem<UIFPlayerSubsystem>())
+			{
+				Player = Subsystem->GetPlayer();
+			}
+		}
+	}
+
+	if (!Player)
+	{
+		UE_LOG(LogIronField, Log, TEXT("[IF-HUD] Player pawn not yet available; awaiting registration/possession."));
 		return;
 	}
 
 	UIFHealthComponent* const Health = Player->GetHealthComponent();
-	if (!Health)
+	UIFStaminaComponent* const Stamina = Player->GetStaminaComponent();
+	if (!Health || !Stamina)
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] Player %s has no health component."), *GetNameSafe(Player));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] Player %s is missing a health or stamina component."), *GetNameSafe(Player));
 		return;
 	}
 
-	UIFStaminaComponent* const Stamina = Player->GetStaminaComponent();
-	if (!Stamina)
+	if (bPlayerBound && BoundPlayerHealth.Get() == Health && BoundPlayerStamina.Get() == Stamina)
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] Player %s has no stamina component."), *GetNameSafe(Player));
 		return;
 	}
+
+	UnbindPlayerStatBars();
 
 	Health->OnHealthChanged.AddDynamic(this, &UIFHUD::HandlePlayerHealthChanged);
 	Stamina->OnStaminaChanged.AddDynamic(this, &UIFHUD::HandlePlayerStaminaChanged);
 
 	BoundPlayerHealth = Health;
 	BoundPlayerStamina = Stamina;
+	bPlayerBound = true;
 
 	PlayerHealthBar->SetTargetPercent(Health->GetHealthPercent());
 	PlayerStaminaBar->SetTargetPercent(Stamina->GetStaminaPercent());
 }
 
-void UIFHUD::BindStrongholdStatBar()
+void UIFHUD::HandleStrongholdRegistered(AIFStronghold* Stronghold)
 {
+	BindStrongholdStatBar(Stronghold);
+}
+
+void UIFHUD::BindStrongholdStatBar(AIFStronghold* Stronghold)
+{
+	if (bStrongholdBound)
+	{
+		return;
+	}
+
 	if (!StrongholdHealthBar)
 	{
 		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] StrongholdHealthBar BindWidget is missing."));
 		return;
 	}
 
-	UWorld* const World = GetWorld();
-	if (!World)
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] No world; stronghold bar not bound."));
-		return;
-	}
-
-	const UIFStrongholdSubsystem* const Subsystem = World->GetSubsystem<UIFStrongholdSubsystem>();
-	if (!Subsystem)
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] UIFStrongholdSubsystem unavailable; stronghold bar not bound."));
-		return;
-	}
-
-	AIFStronghold* const Stronghold = Subsystem->GetStronghold();
-	if (!Stronghold)
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] No stronghold registered; stronghold bar not bound."));
-		return;
-	}
-
-	UIFHealthComponent* const Health = Stronghold->GetHealthComponent();
+	UIFHealthComponent* const Health = Stronghold ? Stronghold->GetHealthComponent() : nullptr;
 	if (!Health)
 	{
 		UE_LOG(LogIronField, Warning, TEXT("[IF-HUD] Stronghold %s has no health component."), *GetNameSafe(Stronghold));
 		return;
 	}
 
+	bStrongholdBound = true;
 	Health->OnHealthChanged.AddDynamic(this, &UIFHUD::HandleStrongholdHealthChanged);
 	BoundStrongholdHealth = Health;
-
 	StrongholdHealthBar->SetTargetPercent(Health->GetHealthPercent());
 }
 
-void UIFHUD::UnbindAllSources()
+void UIFHUD::UnbindPlayerStatBars()
 {
 	if (UIFHealthComponent* const Health = BoundPlayerHealth.Get())
 	{
@@ -128,33 +172,41 @@ void UIFHUD::UnbindAllSources()
 		Stamina->OnStaminaChanged.RemoveDynamic(this, &UIFHUD::HandlePlayerStaminaChanged);
 	}
 	BoundPlayerStamina = nullptr;
+	bPlayerBound = false;
+}
+
+void UIFHUD::UnbindAllSources()
+{
+	UnbindPlayerStatBars();
 
 	if (UIFHealthComponent* const Health = BoundStrongholdHealth.Get())
 	{
 		Health->OnHealthChanged.RemoveDynamic(this, &UIFHUD::HandleStrongholdHealthChanged);
 	}
 	BoundStrongholdHealth = nullptr;
-}
-
-void UIFHUD::SetBarPercent(UIFStatBarWidget* Bar, float Percent)
-{
-	if (Bar)
-	{
-		Bar->SetTargetPercent(Percent);
-	}
+	bStrongholdBound = false;
 }
 
 void UIFHUD::HandlePlayerHealthChanged(float Percent)
 {
-	SetBarPercent(PlayerHealthBar, Percent);
+	if (PlayerHealthBar)
+	{
+		PlayerHealthBar->SetTargetPercent(Percent);
+	}
 }
 
 void UIFHUD::HandlePlayerStaminaChanged(float Percent)
 {
-	SetBarPercent(PlayerStaminaBar, Percent);
+	if (PlayerStaminaBar)
+	{
+		PlayerStaminaBar->SetTargetPercent(Percent);
+	}
 }
 
 void UIFHUD::HandleStrongholdHealthChanged(float Percent)
 {
-	SetBarPercent(StrongholdHealthBar, Percent);
+	if (StrongholdHealthBar)
+	{
+		StrongholdHealthBar->SetTargetPercent(Percent);
+	}
 }

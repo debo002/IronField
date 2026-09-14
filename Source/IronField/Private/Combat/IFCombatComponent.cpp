@@ -2,7 +2,6 @@
 
 #include "Animation/AnimInstance.h"
 #include "Combat/IFCombatTargetingUtils.h"
-#include "Combat/IFWeaponBoxOwner.h"
 #include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/IFAnimMontageUtils.h"
@@ -35,55 +34,6 @@ void UIFCombatComponent::StartAttack()
 	}
 }
 
-void UIFCombatComponent::StartBlock()
-{
-	if (!IsIdle() || !HasUsableStamina(MinimumStaminaToStartBlock))
-	{
-		return;
-	}
-
-	if (!BlockMontage)
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s StartBlock with no BlockMontage assigned — logic-only block."),
-			*GetNameSafe(GetOwner()));
-	}
-
-	if (!TryPlayBlockMontage())
-	{
-		return;
-	}
-
-	SetCombatState(ECombatState::Blocking);
-
-	if (StaminaComponent)
-	{
-		StaminaComponent->StartContinuousDrain(BlockStaminaDrainRate);
-	}
-}
-
-void UIFCombatComponent::StopBlock()
-{
-	if (!IsBlocking())
-	{
-		return;
-	}
-
-	SetCombatState(ECombatState::Idle);
-
-	UAnimInstance* const AnimInstance = GetAnimInstance();
-	if (AnimInstance && ActiveBlockMontage)
-	{
-		AnimInstance->Montage_Stop(BlockBlendOutTime, ActiveBlockMontage);
-	}
-
-	ActiveBlockMontage = nullptr;
-
-	if (StaminaComponent)
-	{
-		StaminaComponent->StopContinuousDrain();
-	}
-}
-
 void UIFCombatComponent::ResetCombatState()
 {
 	bComboQueued = false;
@@ -92,15 +42,24 @@ void UIFCombatComponent::ResetCombatState()
 	ClearAttackMontageDelegate();
 	ClearReactionMontageDelegates();
 	ActiveAttackMontage = nullptr;
-	ActiveBlockMontage = nullptr;
 	EndAttackCollision();
 
-	if (StaminaComponent)
+	RestoreIdleStateUnlessDead();
+}
+
+void UIFCombatComponent::CancelAttack()
+{
+	ClearAttackMontageDelegate();
+
+	if (UAnimInstance* const AnimInstance = GetAnimInstance())
 	{
-		StaminaComponent->StopContinuousDrain();
+		if (ActiveAttackMontage)
+		{
+			AnimInstance->Montage_Stop(0.15f, ActiveAttackMontage);
+		}
 	}
 
-	RestoreIdleStateUnlessDead();
+	ResetCombatState();
 }
 
 void UIFCombatComponent::HandleOwnerDeath()
@@ -137,6 +96,19 @@ void UIFCombatComponent::BeginAttackCollision()
 	bAttackCollisionActive = true;
 	ResetRegisteredAttackHits();
 	SetWeaponCollisionEnabled(true);
+
+	// Stationary targets already inside the box do not reliably produce a new
+	// BeginOverlap when the box toggles on, so sweep the current overlappers too.
+	// TryRegisterAttackHit makes the event path + this query mutually exclusive.
+	if (WeaponCollisionBox)
+	{
+		TArray<AActor*> CurrentlyOverlapping;
+		WeaponCollisionBox->GetOverlappingActors(CurrentlyOverlapping);
+		for (AActor* const Other : CurrentlyOverlapping)
+		{
+			ResolveAttackHit(Other);
+		}
+	}
 }
 
 void UIFCombatComponent::EndAttackCollision()
@@ -151,13 +123,6 @@ void UIFCombatComponent::ReceiveAttack(AActor* Instigator, float Damage, TSubcla
 {
 	if (IsDead())
 	{
-		return;
-	}
-
-	const bool bFacing = IsOwnerFacingTarget(Instigator);
-	if ((IsBlocking() && bFacing) || ShouldReactivelyBlock(bFacing))
-	{
-		PlayBlockReactionMontage();
 		return;
 	}
 
@@ -186,14 +151,39 @@ void UIFCombatComponent::BeginPlay()
 	CachedMesh = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
 	StaminaComponent = Owner ? Owner->FindComponentByClass<UIFStaminaComponent>() : nullptr;
 
-	if (const IIFWeaponBoxOwner* const WeaponOwner = Cast<IIFWeaponBoxOwner>(Owner))
-	{
-		WeaponCollisionBox = WeaponOwner->GetWeaponCollisionBox();
-	}
-
 	if (WeaponCollisionBox)
 	{
+		// A weapon box with no attach parent sits at the world origin and can never
+		// touch a target. Anchor it to the owner so it at least follows the fighter.
+		if (!WeaponCollisionBox->GetAttachParent())
+		{
+			UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s WeaponCollisionBox has no attach parent; auto-attaching to the root. Set the intended parent/socket in Blueprint."),
+				*GetNameSafe(Owner));
+
+			if (USceneComponent* const Parent = Owner ? Owner->GetRootComponent() : nullptr)
+			{
+				WeaponCollisionBox->AttachToComponent(Parent, FAttachmentTransformRules::KeepRelativeTransform);
+			}
+		}
+
+		// Untouched UE defaults (32cm cube at the origin) can never reach a target
+		// the AI considers in range. Apply weapon defaults that cover CombatRange;
+		// any Blueprint-configured transform is respected as-is.
+		if (WeaponCollisionBox->GetRelativeLocation().IsNearlyZero()
+			&& WeaponCollisionBox->GetScaledBoxExtent().Equals(FVector(32.f), 1.f))
+		{
+			WeaponCollisionBox->SetRelativeLocation(FVector(60.f, 0.f, 0.f));
+			WeaponCollisionBox->SetBoxExtent(FVector(80.f, 60.f, 60.f));
+		}
+
+		// The box must start disabled; it is only live inside an attack window.
+		// (BP defaults leave it enabled, which produced idle-contact events.)
+		SetWeaponCollisionEnabled(false);
 		WeaponCollisionBox->OnComponentBeginOverlap.AddDynamic(this, &UIFCombatComponent::HandleWeaponBoxBeginOverlap);
+	}
+	else if (RequiresWeaponCollisionBox())
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has no WeaponCollisionBox assigned; attacks will not register hits."), *GetNameSafe(Owner));
 	}
 }
 
@@ -207,12 +197,6 @@ void UIFCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	EndAttackCollision();
 	ClearAttackMontageDelegate();
 	ClearReactionMontageDelegates();
-	ActiveBlockMontage = nullptr;
-
-	if (StaminaComponent)
-	{
-		StaminaComponent->StopContinuousDrain();
-	}
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -238,7 +222,10 @@ bool UIFCombatComponent::HasUsableStamina(float Amount) const
 	{
 		return true;
 	}
-	return StaminaComponent && StaminaComponent->HasStamina(Amount);
+
+	// Stamina is a player-only component. Enemies do not need a stamina setup
+	// to use an authored attack montage.
+	return !StaminaComponent || StaminaComponent->HasStamina(Amount);
 }
 
 void UIFCombatComponent::SetCombatState(ECombatState NewState)
@@ -295,7 +282,7 @@ bool UIFCombatComponent::TryPlayAttackMontage(int32 ComboIndex)
 		return false;
 	}
 
-	if (StaminaCost > 0.f && (!StaminaComponent || !StaminaComponent->TryConsumeStamina(StaminaCost)))
+	if (StaminaCost > 0.f && StaminaComponent && !StaminaComponent->TryConsumeStamina(StaminaCost))
 	{
 		AnimInstance->Montage_Stop(0.f, AttackMontage);
 		return false;
@@ -350,45 +337,6 @@ float UIFCombatComponent::GetComboStaminaCost(int32 ComboIndex) const
 	return ComboSteps.IsValidIndex(ComboIndex) ? ComboSteps[ComboIndex].StaminaCost : 0.f;
 }
 
-bool UIFCombatComponent::TryPlayBlockMontage()
-{
-	UAnimInstance* const AnimInstance = GetAnimInstance();
-	if (!AnimInstance || !BlockMontage)
-	{
-		ActiveBlockMontage = nullptr;
-		return true;
-	}
-
-	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockMontage);
-
-	const float PlayLength = AnimInstance->Montage_Play(BlockMontage);
-	if (PlayLength <= 0.f)
-	{
-		ActiveBlockMontage = nullptr;
-		return false;
-	}
-
-	ActiveBlockMontage = BlockMontage;
-	return true;
-}
-
-bool UIFCombatComponent::IsOwnerFacingTarget(AActor* TargetActor) const
-{
-	const AActor* const Owner = GetOwner();
-	if (!Owner || !TargetActor)
-	{
-		return false;
-	}
-
-	const FVector DirectionToTarget = (TargetActor->GetActorLocation() - Owner->GetActorLocation()).GetSafeNormal2D();
-	if (DirectionToTarget.IsNearlyZero())
-	{
-		return true;
-	}
-
-	return FVector::DotProduct(Owner->GetActorForwardVector().GetSafeNormal2D(), DirectionToTarget) >= BlockFacingDotThreshold;
-}
-
 void UIFCombatComponent::PlayHitReactionMontage()
 {
 	UAnimInstance* const AnimInstance = GetAnimInstance();
@@ -407,32 +355,6 @@ void UIFCombatComponent::PlayHitReactionMontage()
 	}
 }
 
-void UIFCombatComponent::PlayBlockReactionMontage()
-{
-	UAnimInstance* const AnimInstance = GetAnimInstance();
-	if (!AnimInstance || !BlockReactionMontage)
-	{
-		return;
-	}
-
-	if (BlockMontage && AnimInstance->Montage_IsPlaying(BlockMontage))
-	{
-		AnimInstance->Montage_Stop(FMath::Max(0.01f, BlockBlendOutTime), BlockMontage);
-	}
-
-	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
-
-	const float PlayLength = AnimInstance->Montage_Play(BlockReactionMontage);
-	if (PlayLength > 0.f)
-	{
-		ActiveBlockMontage = BlockReactionMontage;
-
-		FOnMontageEnded EndDelegate;
-		EndDelegate.BindUObject(this, &UIFCombatComponent::HandleBlockReactionMontageEnded);
-		AnimInstance->Montage_SetEndDelegate(EndDelegate, BlockReactionMontage);
-	}
-}
-
 void UIFCombatComponent::HandleHitReactionMontageEnded(UAnimMontage* Montage, bool)
 {
 	if (Montage != HitReactionMontage)
@@ -441,34 +363,12 @@ void UIFCombatComponent::HandleHitReactionMontageEnded(UAnimMontage* Montage, bo
 	}
 
 	IFAnimMontageUtils::ClearMontageEndDelegate(GetAnimInstance(), HitReactionMontage);
-
-	if (IsBlocking())
-	{
-		TryPlayBlockMontage();
-	}
-}
-
-void UIFCombatComponent::HandleBlockReactionMontageEnded(UAnimMontage* Montage, bool)
-{
-	if (Montage != BlockReactionMontage)
-	{
-		return;
-	}
-
-	IFAnimMontageUtils::ClearMontageEndDelegate(GetAnimInstance(), BlockReactionMontage);
-	ActiveBlockMontage = nullptr;
-
-	if (IsBlocking())
-	{
-		StopBlock();
-	}
 }
 
 void UIFCombatComponent::ClearReactionMontageDelegates()
 {
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, HitReactionMontage);
-	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
 }
 
 void UIFCombatComponent::HandleWeaponBoxBeginOverlap(UPrimitiveComponent*, AActor* OtherActor, UPrimitiveComponent*, int32, bool, const FHitResult&)

@@ -4,18 +4,23 @@
 #include "Blueprint/UserWidget.h"
 #include "IFHUD.generated.h"
 
+class AIFStronghold;
+class AIFPlayerCharacter;
 class UIFStatBarWidget;
 class UIFHealthComponent;
 class UIFStaminaComponent;
 
 /**
- * Gameplay HUD root. Binds player/stronghold health and stamina delegates and
- * forwards percentages to child UIFStatBarWidget instances. No tick, no interpolation.
+ * Gameplay HUD root. Binds player and stronghold stat delegates and forwards
+ * percentages to child UIFStatBarWidget instances.
  */
 UCLASS()
 class IRONFIELD_API UIFHUD : public UUserWidget
 {
 	GENERATED_BODY()
+
+public:
+	void BindPlayerStatBars(AIFPlayerCharacter* InPlayer = nullptr);
 
 protected:
 	UPROPERTY(meta = (BindWidget))
@@ -38,14 +43,22 @@ private:
 	void HandlePlayerStaminaChanged(float Percent);
 
 	UFUNCTION()
+	void HandlePlayerRegistered(AIFPlayerCharacter* Player);
+
+	UFUNCTION()
+	void HandleStrongholdRegistered(AIFStronghold* Stronghold);
+
+	UFUNCTION()
 	void HandleStrongholdHealthChanged(float Percent);
 
-	void BindPlayerStatBars();
-	void BindStrongholdStatBar();
+	void BindStrongholdStatBar(AIFStronghold* Stronghold);
 	void UnbindAllSources();
-	void SetBarPercent(UIFStatBarWidget* Bar, float Percent);
+	void UnbindPlayerStatBars();
 
 	TWeakObjectPtr<UIFHealthComponent> BoundPlayerHealth;
 	TWeakObjectPtr<UIFStaminaComponent> BoundPlayerStamina;
 	TWeakObjectPtr<UIFHealthComponent> BoundStrongholdHealth;
+
+	bool bPlayerBound = false;
+	bool bStrongholdBound = false;
 };

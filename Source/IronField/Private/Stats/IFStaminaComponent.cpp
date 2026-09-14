@@ -4,7 +4,6 @@ UIFStaminaComponent::UIFStaminaComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	PrimaryComponentTick.bStartWithTickEnabled = false;
-	CurrentStamina = MaxStamina;
 }
 
 bool UIFStaminaComponent::TryConsumeStamina(float Amount)

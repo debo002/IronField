@@ -1,62 +1,63 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Combat/IFCombatTypes.h"
 #include "Stats/IFStatComponent.h"
 #include "IFHealthComponent.generated.h"
 
-UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
+DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnHealthDepleted);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnHealthChanged, float, Percent);
+
+UCLASS()
 class IRONFIELD_API UIFHealthComponent : public UIFStatComponent
 {
 	GENERATED_BODY()
 
 public:
-	UIFHealthComponent();
-
-	UPROPERTY(BlueprintAssignable, Category = "Health|Events")
+	UPROPERTY(BlueprintAssignable, Category = "IronField|Health|Events")
 	FOnHealthDepleted OnHealthDepleted;
 
-	UPROPERTY(BlueprintAssignable, Category = "Health|Events")
+	UPROPERTY(BlueprintAssignable, Category = "IronField|Health|Events")
 	FOnHealthChanged OnHealthChanged;
 
-	UFUNCTION(BlueprintCallable, Category = "Health|Actions")
+	UFUNCTION(BlueprintCallable, Category = "IronField|Health|Actions")
 	void ApplyHealing(float Amount);
 
-	UFUNCTION(BlueprintCallable, Category = "Health|Actions")
+	/** Only valid while dead; reviving a living character does nothing. */
+	UFUNCTION(BlueprintCallable, Category = "IronField|Health|Actions")
 	void Revive();
 
-	UFUNCTION(BlueprintCallable, Category = "Health|Actions")
+	UFUNCTION(BlueprintCallable, Category = "IronField|Health|Actions")
 	void SetInvincible(bool bNewInvincible) { bIsInvincible = bNewInvincible; }
 
-	UFUNCTION(BlueprintPure, Category = "Health|State")
+	UFUNCTION(BlueprintPure, Category = "IronField|Health|State")
 	float GetHealthPercent() const { return ComputePercent(CurrentHealth, MaxHealth); }
 
-	UFUNCTION(BlueprintPure, Category = "Health|State")
+	UFUNCTION(BlueprintPure, Category = "IronField|Health|State")
 	bool IsDead() const { return bIsDead; }
 
-	UFUNCTION(BlueprintPure, Category = "Health|State")
+	UFUNCTION(BlueprintPure, Category = "IronField|Health|State")
 	bool IsInvincible() const { return bIsInvincible; }
 
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Health|Attributes", meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
 	float MaxHealth = 100.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Health|Attributes", meta = (AllowPrivateAccess = "true", ClampMin = "1.0"))
 	float ReviveHealth = 30.f;
 
-	UPROPERTY(VisibleInstanceOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
-	float CurrentHealth = 100.f;
+	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Health|Attributes", meta = (AllowPrivateAccess = "true"))
+	float CurrentHealth;
 
-	UPROPERTY(VisibleInstanceOnly, Category = "Health|Attributes", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Health|Attributes", meta = (AllowPrivateAccess = "true"))
 	bool bIsInvincible = false;
 
-	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "Health|State", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "IronField|Health|State", meta = (AllowPrivateAccess = "true"))
 	bool bIsDead = false;
 
-	/** Internal only — combat must use TakeDamage / DeliverDamage so instigator is tracked. */
+	// Internal only; damage must enter through TakeDamage so the instigator is tracked.
 	void ApplyDamage(float Amount);
 
 	UFUNCTION()

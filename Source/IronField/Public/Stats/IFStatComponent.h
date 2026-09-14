@@ -4,11 +4,8 @@
 #include "Components/ActorComponent.h"
 #include "IFStatComponent.generated.h"
 
-/**
- * Shared clamp / percent helpers for health, stamina, and future resource components.
- * Domain types keep their own MaxX/CurrentX UPROPERTY names for Blueprint stability.
- */
-UCLASS(Abstract, ClassGroup = (Custom))
+/** Shared clamping helpers for the health and stamina components. */
+UCLASS(Abstract)
 class IRONFIELD_API UIFStatComponent : public UActorComponent
 {
 	GENERATED_BODY()

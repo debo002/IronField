@@ -6,6 +6,11 @@
 void UIFPlayerSubsystem::RegisterPlayer(AIFPlayerCharacter* InPlayer)
 {
 	IFSingletonActorRegistry::Register(ActivePlayer, InPlayer, TEXT("Player"));
+
+	if (ActivePlayer)
+	{
+		OnPlayerRegistered.Broadcast(ActivePlayer);
+	}
 }
 
 void UIFPlayerSubsystem::UnregisterPlayer(AIFPlayerCharacter* InPlayer)

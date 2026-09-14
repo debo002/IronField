@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AIController.h"
+#include "AI/IFBTUtils.h"
 #include "Combat/IFCombatTypes.h"
 #include "IFEnemyController.generated.h"
 
@@ -20,7 +21,7 @@ public:
 
 	UIFCombatComponent* GetControlledCombatComponent() const { return CachedCombatComponent; }
 
-	/** Shared AI tunables. Never null at runtime — falls back to CDO defaults if unset (with a one-time warning). */
+	/** Shared AI tunables. Never null at runtime — falls back to CDO defaults if unset. */
 	const UIFEnemyAIData* GetAIData() const;
 
 	FName GetTargetActorKeyName() const { return TargetActorKeyName; }
@@ -29,15 +30,15 @@ public:
 	virtual void OnUnPossess() override;
 
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "Enemy|Behavior")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|AI|Behavior")
 	TObjectPtr<UBehaviorTree> BehaviorTreeAsset;
 
-	UPROPERTY(EditDefaultsOnly, Category = "AI")
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|AI|Data")
 	TObjectPtr<UIFEnemyAIData> AIData;
 
-	/** Must match the TargetActor key on BB_Enemy and every BT node selector. */
-	UPROPERTY(EditDefaultsOnly, Category = "AI")
-	FName TargetActorKeyName = TEXT("TargetActor");
+	// Must match the TargetActor key on BB_Enemy and every BT node selector (see IFAI::TargetActorKey).
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|AI|Behavior")
+	FName TargetActorKeyName = IFAI::TargetActorKey;
 
 private:
 	float LastAttackEndedTime = -1.f;
@@ -56,9 +57,9 @@ private:
 	void HandleOwnHealthDepleted();
 
 	UFUNCTION()
-	void HandlePlayerDied();
+	void HandlePlayerDowned();
 
-	void InitializeAfterPossession();
+	void InitializeControlledPawn();
 	void BindOwnDelegates();
 	void UnbindOwnDelegates();
 	void ApplyMovementSpeedForState(ECombatState State);

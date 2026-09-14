@@ -1,105 +1,141 @@
 #include "Core/IFGameMode.h"
 
 #include "Building/IFStronghold.h"
+#include "Character/IFPlayerCharacter.h"
 #include "Core/IFLog.h"
 #include "Core/IFPlayerController.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Core/IFWaveManagerSubsystem.h"
-#include "TimerManager.h"
+#include "Engine/World.h"
+#include "UObject/ConstructorHelpers.h"
 #include "Wave/IFWaveManager.h"
+
+AIFGameMode::AIFGameMode()
+{
+	static ConstructorHelpers::FClassFinder<APlayerController> ControllerFinder(TEXT("/Game/IronField/Core/Gameplay/BP_PlayerController"));
+	if (ControllerFinder.Succeeded())
+	{
+		PlayerControllerClass = ControllerFinder.Class;
+	}
+	else
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-GameMode] BP_PlayerController not found; falling back to AIFPlayerController."));
+		PlayerControllerClass = AIFPlayerController::StaticClass();
+	}
+
+	static ConstructorHelpers::FClassFinder<APawn> PawnFinder(TEXT("/Game/IronField/Characters/Player/BP_Player"));
+	if (PawnFinder.Succeeded())
+	{
+		DefaultPawnClass = PawnFinder.Class;
+	}
+	else
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-GameMode] BP_Player not found; falling back to AIFPlayerCharacter."));
+		DefaultPawnClass = AIFPlayerCharacter::StaticClass();
+	}
+}
 
 void AIFGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (UWorld* const World = GetWorld())
+	UWorld* const World = GetWorld();
+	if (!World)
 	{
-		World->GetTimerManager().SetTimerForNextTick(this, &AIFGameMode::BindGameFlowDelegates);
+		return;
+	}
+
+	if (UIFWaveManagerSubsystem* const WaveSubsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
+	{
+		if (AIFWaveManager* const WaveManager = WaveSubsystem->GetWaveManager())
+		{
+			HandleWaveManagerRegistered(WaveManager);
+		}
+		else
+		{
+			WaveSubsystem->OnWaveManagerRegistered.AddDynamic(this, &AIFGameMode::HandleWaveManagerRegistered);
+		}
+	}
+
+	if (UIFStrongholdSubsystem* const StrongholdSubsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
+	{
+		if (AIFStronghold* const Stronghold = StrongholdSubsystem->GetStronghold())
+		{
+			HandleStrongholdRegistered(Stronghold);
+		}
+		else
+		{
+			StrongholdSubsystem->OnStrongholdRegistered.AddDynamic(this, &AIFGameMode::HandleStrongholdRegistered);
+		}
 	}
 }
 
 void AIFGameMode::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	if (UWorld* const World = GetWorld())
+	UWorld* const World = GetWorld();
+	if (World)
 	{
-		World->GetTimerManager().ClearAllTimersForObject(this);
+		if (UIFWaveManagerSubsystem* const WaveSubsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
+		{
+			WaveSubsystem->OnWaveManagerRegistered.RemoveDynamic(this, &AIFGameMode::HandleWaveManagerRegistered);
+		}
+
+		if (UIFStrongholdSubsystem* const StrongholdSubsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
+		{
+			StrongholdSubsystem->OnStrongholdRegistered.RemoveDynamic(this, &AIFGameMode::HandleStrongholdRegistered);
+		}
 	}
 
-	UnbindGameFlowDelegates();
+	if (BoundWaveManager)
+	{
+		BoundWaveManager->OnAllWavesCompleted.RemoveDynamic(this, &AIFGameMode::HandleAllWavesCompleted);
+		BoundWaveManager = nullptr;
+	}
+
+	if (BoundStronghold)
+	{
+		BoundStronghold->OnStrongholdDestroyed.RemoveDynamic(this, &AIFGameMode::HandleStrongholdDestroyed);
+		BoundStronghold = nullptr;
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
-void AIFGameMode::BindGameFlowDelegates()
+void AIFGameMode::HandleWaveManagerRegistered(AIFWaveManager* WaveManager)
 {
-	const UWorld* const World = GetWorld();
-	if (!World)
+	if (!WaveManager || BoundWaveManager)
 	{
 		return;
 	}
 
-	if (const UIFWaveManagerSubsystem* const WaveSubsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
-	{
-		if (AIFWaveManager* const WaveManager = WaveSubsystem->GetWaveManager())
-		{
-			WaveManager->OnAllWavesCompleted.AddDynamic(this, &AIFGameMode::HandleAllWavesCompleted);
-		}
-		else
-		{
-			UE_LOG(LogIronField, Warning, TEXT("[IF-GameMode] No wave manager registered; win condition will not fire."));
-		}
-	}
-
-	if (const UIFStrongholdSubsystem* const StrongholdSubsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
-	{
-		if (AIFStronghold* const Stronghold = StrongholdSubsystem->GetStronghold())
-		{
-			Stronghold->OnStrongholdDestroyed.AddDynamic(this, &AIFGameMode::HandleStrongholdDestroyed);
-		}
-		else
-		{
-			UE_LOG(LogIronField, Warning, TEXT("[IF-GameMode] No stronghold registered; lose condition will not fire."));
-		}
-	}
+	BoundWaveManager = WaveManager;
+	WaveManager->OnAllWavesCompleted.AddDynamic(this, &AIFGameMode::HandleAllWavesCompleted);
 }
 
-void AIFGameMode::UnbindGameFlowDelegates()
+void AIFGameMode::HandleStrongholdRegistered(AIFStronghold* Stronghold)
 {
-	const UWorld* const World = GetWorld();
-	if (!World)
+	if (!Stronghold || BoundStronghold)
 	{
 		return;
 	}
 
-	if (const UIFWaveManagerSubsystem* const WaveSubsystem = World->GetSubsystem<UIFWaveManagerSubsystem>())
-	{
-		if (AIFWaveManager* const WaveManager = WaveSubsystem->GetWaveManager())
-		{
-			WaveManager->OnAllWavesCompleted.RemoveDynamic(this, &AIFGameMode::HandleAllWavesCompleted);
-		}
-	}
-
-	if (const UIFStrongholdSubsystem* const StrongholdSubsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
-	{
-		if (AIFStronghold* const Stronghold = StrongholdSubsystem->GetStronghold())
-		{
-			Stronghold->OnStrongholdDestroyed.RemoveDynamic(this, &AIFGameMode::HandleStrongholdDestroyed);
-		}
-	}
+	BoundStronghold = Stronghold;
+	Stronghold->OnStrongholdDestroyed.AddDynamic(this, &AIFGameMode::HandleStrongholdDestroyed);
 }
 
 void AIFGameMode::HandleAllWavesCompleted()
 {
 	UE_LOG(LogIronField, Log, TEXT("[IF-GameMode] All waves completed."));
-	OnGameWon();
+	ShowGameOver(EIFGameResult::Victory);
 }
 
-void AIFGameMode::HandleStrongholdDestroyed(AIFStronghold* )
+void AIFGameMode::HandleStrongholdDestroyed(AIFStronghold*)
 {
 	UE_LOG(LogIronField, Log, TEXT("[IF-GameMode] Stronghold destroyed."));
-	OnGameLost();
+	ShowGameOver(EIFGameResult::Defeat);
 }
 
-void AIFGameMode::OnGameLost()
+void AIFGameMode::ShowGameOver(EIFGameResult Result)
 {
 	UWorld* const World = GetWorld();
 	if (!World)
@@ -113,5 +149,5 @@ void AIFGameMode::OnGameLost()
 		return;
 	}
 
-	PlayerController->ShowLoseScreen();
+	PlayerController->ShowGameOverScreen(Result);
 }

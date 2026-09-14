@@ -2,7 +2,6 @@
 
 #include "AIController.h"
 #include "Combat/IFCombatComponent.h"
-#include "Combat/IFPlayerObjective.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/Pawn.h"
 #include "Stats/IFHealthComponent.h"
@@ -31,15 +30,8 @@ namespace IFCombatTargetingUtils
 			return nullptr;
 		}
 
-		// Player-owned objectives (stronghold, future towers) only take damage from enemy AI.
-		if (const IIFPlayerObjective* const Objective = Cast<IIFPlayerObjective>(TargetActor))
-		{
-			if (Objective->IsProtectedFromPlayerDamage() && !IsAIControlled(OwnerPawn))
-			{
-				return nullptr;
-			}
-		}
-
+		// Any actor with health is damageable.  This includes the stronghold;
+		// neither melee nor ranged player attacks need a special target rule.
 		UIFHealthComponent* const TargetHealth = TargetActor->FindComponentByClass<UIFHealthComponent>();
 		return (TargetHealth && !TargetHealth->IsDead()) ? TargetHealth : nullptr;
 	}

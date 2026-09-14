@@ -18,6 +18,10 @@ protected:
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
 	virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override;
 
-	UPROPERTY(EditAnywhere, Category = "Targeting")
+	UPROPERTY(EditAnywhere, Category = "IronField|AI|Targeting")
 	FBlackboardKeySelector TargetActorKey;
+
+	/** Seconds between repath requests while the target keeps moving. */
+	UPROPERTY(EditAnywhere, Category = "IronField|AI|Movement", meta = (ClampMin = "0.05"))
+	float RepathInterval = 0.25f;
 };

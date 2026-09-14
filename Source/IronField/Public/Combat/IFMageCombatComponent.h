@@ -7,18 +7,16 @@
 class AIFProjectile;
 
 /**
- * Lean ranged combat. Hides inherited melee categories (combo/block/weapon) and only implements
- * cast montage + projectile fire. No combo, block, or weapon-box path.
+ * Ranged combat for the mage: cast montage + projectile fire.
+ * The inherited melee categories (combo/weapon) are hidden because they do not apply.
  */
-UCLASS(ClassGroup = (Custom), HideCategories = ("Combat|Blocking", "Combat|Stamina", "Combat|Combo", "Combat|State"), meta = (BlueprintSpawnableComponent))
+UCLASS(HideCategories = ("IronField|Combat|Stamina", "IronField|Combat|Combo", "IronField|Combat|State", "IronField|Combat|Weapon"))
 class IRONFIELD_API UIFMageCombatComponent : public UIFCombatComponent
 {
 	GENERATED_BODY()
 
 public:
 	virtual void StartAttack() override;
-	virtual void StartBlock() override {}
-	virtual void StopBlock() override {}
 	virtual void LaunchProjectileAttack() override;
 	virtual void BeginAttackCollision() override {}
 	virtual void EndAttackCollision() override {}
@@ -27,22 +25,22 @@ protected:
 	virtual float GetCurrentAttackDamage() const override { return AttackDamage; }
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override { return DamageTypeClass; }
 	virtual bool CanQueueComboAttack() const override { return false; }
-	virtual bool ShouldReactivelyBlock(bool bFacingAttacker) const override { return false; }
 	virtual void PlayHitReactionMontage() override;
 
 private:
-	UPROPERTY(EditDefaultsOnly, Category = "Mage|Cast", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Cast", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAnimMontage> CastMontage;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Mage|Projectile", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Projectile", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<AIFProjectile> ProjectileClass;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Mage|Projectile", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Projectile", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float ProjectileSpawnForwardOffset = 60.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Mage|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
-	float AttackDamage = 20.f;
+	// Tuned down while the mage deals damage for the first time; re-tune after the re-test.
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
+	float AttackDamage = 12.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Mage|Damage", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Damage", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UDamageType> DamageTypeClass;
 };

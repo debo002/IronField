@@ -6,6 +6,11 @@
 void UIFWaveManagerSubsystem::RegisterWaveManager(AIFWaveManager* InWaveManager)
 {
 	IFSingletonActorRegistry::Register(ActiveWaveManager, InWaveManager, TEXT("WaveManager"));
+
+	if (ActiveWaveManager)
+	{
+		OnWaveManagerRegistered.Broadcast(ActiveWaveManager);
+	}
 }
 
 void UIFWaveManagerSubsystem::UnregisterWaveManager(AIFWaveManager* InWaveManager)

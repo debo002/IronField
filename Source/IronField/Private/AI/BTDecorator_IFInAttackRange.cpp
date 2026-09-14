@@ -2,6 +2,7 @@
 
 #include "AI/IFBTUtils.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
+#include "Character/IFEnemyCharacter.h"
 
 UBTDecorator_IFInAttackRange::UBTDecorator_IFInAttackRange()
 {

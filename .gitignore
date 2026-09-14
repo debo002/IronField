@@ -14,6 +14,14 @@ Build/
 *.VC.db
 *.VC.opendb
 Plugins/Developer/RiderLink
+*.DotSettings.user
+
+# One-off Unreal inspection exports and local scripts
+/*.t3d
+/inspect_*.py
+/test_unreal_python.py
+/verify_assets.py
+/out.txt
 
 # Engine-generated project files
 *.xcodeproj
@@ -37,7 +45,9 @@ Content/Developers/
 Content/__ExternalActors__/
 Content/__ExternalObjects__/
 
-# Exclude all content by default, then whitelist project folders
+# Only project-authored content is versioned. Marketplace packs live in
+# Content/ThirdParty/ and are required locally (see Docs/ARCHITECTURE.md),
+# but are deliberately kept out of the repository.
 Content/*
 !Content/IronField/
 !Content/IronField/**

@@ -8,6 +8,7 @@
 #include "Combat/IFCombatComponent.h"
 #include "Core/IFLog.h"
 #include "Core/IFWaveManagerSubsystem.h"
+#include "Engine/World.h"
 #include "Stats/IFHealthComponent.h"
 #include "Wave/IFWaveManager.h"
 
@@ -35,14 +36,10 @@ bool AIFEnemyController::IsReadyForNewAttack() const
 void AIFEnemyController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
-
-	if (UWorld* const World = GetWorld())
-	{
-		World->GetTimerManager().SetTimerForNextTick(this, &AIFEnemyController::InitializeAfterPossession);
-	}
+	InitializeControlledPawn();
 }
 
-void AIFEnemyController::InitializeAfterPossession()
+void AIFEnemyController::InitializeControlledPawn()
 {
 	if (!AIData)
 	{
@@ -64,7 +61,7 @@ void AIFEnemyController::InitializeAfterPossession()
 
 	if (CachedWaveManager)
 	{
-		CachedWaveManager->OnPlayerDied.AddDynamic(this, &AIFEnemyController::HandlePlayerDied);
+		CachedWaveManager->OnPlayerDowned.AddDynamic(this, &AIFEnemyController::HandlePlayerDowned);
 	}
 
 	BindOwnDelegates();
@@ -115,7 +112,7 @@ void AIFEnemyController::UnbindOwnDelegates()
 
 	if (CachedWaveManager)
 	{
-		CachedWaveManager->OnPlayerDied.RemoveAll(this);
+		CachedWaveManager->OnPlayerDowned.RemoveAll(this);
 	}
 }
 
@@ -127,7 +124,9 @@ void AIFEnemyController::HandleOwnCombatStateChanged(ECombatState PreviousState,
 		{
 			LastAttackEndedTime = World->GetTimeSeconds();
 			const UIFEnemyAIData* const Data = GetAIData();
-			CurrentReattackCooldownSeconds = FMath::RandRange(Data->MinReattackCooldownSeconds, Data->MaxReattackCooldownSeconds);
+			const float MinCooldown = FMath::Min(Data->MinReattackCooldownSeconds, Data->MaxReattackCooldownSeconds);
+			const float MaxCooldown = FMath::Max(Data->MinReattackCooldownSeconds, Data->MaxReattackCooldownSeconds);
+			CurrentReattackCooldownSeconds = FMath::RandRange(MinCooldown, MaxCooldown);
 		}
 	}
 
@@ -150,7 +149,7 @@ void AIFEnemyController::HandleOwnHealthDepleted()
 	}
 }
 
-void AIFEnemyController::HandlePlayerDied()
+void AIFEnemyController::HandlePlayerDowned()
 {
 	UBlackboardComponent* const BB = GetBlackboardComponent();
 	if (!BB || !CachedWaveManager)

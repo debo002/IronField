@@ -5,12 +5,12 @@
 AIFEnemyCharacter::AIFEnemyCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
-	UCharacterMovementComponent* const Movement = GetCharacterMovement();
-	Movement->bUseRVOAvoidance = true;
-	Movement->AvoidanceWeight = 0.5f;
-	Movement->bOrientRotationToMovement = true;
-	Movement->bUseControllerDesiredRotation = false;
-	Movement->RotationRate = FRotator(0.f, 480.f, 0.f);
+	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
+	{
+		Movement->bUseRVOAvoidance = true;
+		Movement->AvoidanceWeight = 0.5f;
+		Movement->bOrientRotationToMovement = true;
+	}
 }
 
 void AIFEnemyCharacter::ApplyMovementSpeedForState(ECombatState State)
@@ -26,13 +26,10 @@ void AIFEnemyCharacter::ApplyMovementSpeedForState(ECombatState State)
 	case ECombatState::Attacking:
 		Movement->MaxWalkSpeed = AttackingSpeed;
 		break;
-	case ECombatState::Blocking:
-		Movement->MaxWalkSpeed = BlockingSpeed;
-		break;
 	case ECombatState::Idle:
 		Movement->MaxWalkSpeed = ChaseSpeed;
 		break;
-	case ECombatState::Dead:
+	default:
 		break;
 	}
 }

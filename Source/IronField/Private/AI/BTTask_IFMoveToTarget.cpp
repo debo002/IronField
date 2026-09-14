@@ -3,6 +3,7 @@
 #include "AIController.h"
 #include "AI/IFBTUtils.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
+#include "Character/IFEnemyCharacter.h"
 #include "Navigation/PathFollowingComponent.h"
 
 namespace
@@ -11,8 +12,6 @@ namespace
 	{
 		float TimeSinceRepath = 0.f;
 	};
-
-	constexpr float RepathInterval = 0.25f;
 }
 
 UBTTask_IFMoveToTarget::UBTTask_IFMoveToTarget()
@@ -42,6 +41,7 @@ EBTNodeResult::Type UBTTask_IFMoveToTarget::ExecuteTask(UBehaviorTreeComponent& 
 	const float Range = Enemy->GetCombatRange();
 	if (IsWithinRange(Enemy, Target, Range))
 	{
+		AIController->StopMovement();
 		return EBTNodeResult::Succeeded;
 	}
 

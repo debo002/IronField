@@ -4,8 +4,6 @@
 #include "Character/IFEnemyCharacter.h"
 #include "IFMageEnemyCharacter.generated.h"
 
-class UStaticMeshComponent;
-
 UCLASS()
 class IRONFIELD_API AIFMageEnemyCharacter : public AIFEnemyCharacter
 {
@@ -16,9 +14,12 @@ public:
 
 	virtual void Tick(float DeltaSeconds) override;
 
+protected:
+	virtual void OnDeathStarted() override;
+
 private:
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Mage|Equipment", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UStaticMeshComponent> StaffMesh;
+	// Avoids redundant SetFocus/ClearFocus calls every tick while the target is unchanged.
+	TWeakObjectPtr<AActor> CurrentFocusTarget;
 
 	void UpdateFocusOnTarget();
 };

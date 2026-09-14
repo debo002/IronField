@@ -1,9 +1,20 @@
 #include "Core/IFPlayerController.h"
 
+#include "Character/IFPlayerCharacter.h"
 #include "Core/IFPlayerControllerUtils.h"
 #include "Kismet/GameplayStatics.h"
+#include "UI/IFGameOverScreenWidget.h"
 #include "UI/IFHUD.h"
-#include "UI/IFLoseScreenWidget.h"
+#include "UObject/ConstructorHelpers.h"
+
+AIFPlayerController::AIFPlayerController()
+{
+	static ConstructorHelpers::FClassFinder<UIFHUD> HUDFinder(TEXT("/Game/IronField/UI/WBP_HUD"));
+	if (HUDFinder.Succeeded())
+	{
+		HUDWidgetClass = HUDFinder.Class;
+	}
+}
 
 void AIFPlayerController::BeginPlay()
 {
@@ -11,6 +22,16 @@ void AIFPlayerController::BeginPlay()
 
 	ApplyGameplayInputMode();
 	CreateAndShowHUD();
+}
+
+void AIFPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+
+	if (HUDWidget)
+	{
+		HUDWidget->BindPlayerStatBars(Cast<AIFPlayerCharacter>(InPawn));
+	}
 }
 
 void AIFPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -21,10 +42,10 @@ void AIFPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		HUDWidget = nullptr;
 	}
 
-	if (LoseScreenWidget)
+	if (GameOverScreenWidget)
 	{
-		LoseScreenWidget->RemoveFromParent();
-		LoseScreenWidget = nullptr;
+		GameOverScreenWidget->RemoveFromParent();
+		GameOverScreenWidget = nullptr;
 	}
 
 	Super::EndPlay(EndPlayReason);
@@ -52,25 +73,21 @@ void AIFPlayerController::ApplyGameplayInputMode()
 	FlushPressedKeys();
 }
 
-void AIFPlayerController::ShowLoseScreen()
+void AIFPlayerController::ShowGameOverScreen(EIFGameResult Result)
 {
-	if (!LoseScreenWidgetClass || LoseScreenWidget)
+	if (!GameOverScreenWidgetClass || GameOverScreenWidget)
 	{
 		return;
 	}
 
-	LoseScreenWidget = CreateWidget<UIFLoseScreenWidget>(this, LoseScreenWidgetClass);
-	if (!LoseScreenWidget)
+	GameOverScreenWidget = CreateWidget<UIFGameOverScreenWidget>(this, GameOverScreenWidgetClass);
+	if (!GameOverScreenWidget)
 	{
 		return;
 	}
 
-	IFPlayerControllerUtils::FocusWidgetWithUIOnlyInput(this, LoseScreenWidget);
-
-	if (LoseStinger)
-	{
-		UGameplayStatics::PlaySound2D(this, LoseStinger);
-	}
+	GameOverScreenWidget->SetResult(Result);
+	IFPlayerControllerUtils::FocusWidgetWithUIOnlyInput(this, GameOverScreenWidget);
 
 	UGameplayStatics::SetGamePaused(this, true);
 }

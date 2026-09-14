@@ -2,12 +2,6 @@
 
 #include "GameFramework/Actor.h"
 
-UIFHealthComponent::UIFHealthComponent()
-{
-	PrimaryComponentTick.bCanEverTick = false;
-	CurrentHealth = MaxHealth;
-}
-
 void UIFHealthComponent::ApplyDamage(float Amount)
 {
 	if (bIsDead || bIsInvincible || Amount <= 0.f)
@@ -36,6 +30,11 @@ void UIFHealthComponent::ApplyHealing(float Amount)
 
 void UIFHealthComponent::Revive()
 {
+	if (!bIsDead)
+	{
+		return;
+	}
+
 	bIsDead = false;
 	SetHealthClamped(FMath::Clamp(ReviveHealth, 1.f, MaxHealth));
 }

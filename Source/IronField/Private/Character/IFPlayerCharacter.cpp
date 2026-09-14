@@ -1,38 +1,43 @@
 #include "Character/IFPlayerCharacter.h"
 
 #include "Camera/CameraComponent.h"
-#include "Character/IFCharacterSetupUtils.h"
 #include "Combat/IFCombatComponent.h"
 #include "Combat/IFPlayerCombatComponent.h"
-#include "Components/BoxComponent.h"
-#include "Components/StaticMeshComponent.h"
 #include "Core/IFPlayerSubsystem.h"
-#include "Stats/IFHealthComponent.h"
-#include "Stats/IFStaminaComponent.h"
+#include "Engine/World.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "Stats/IFHealthComponent.h"
+#include "Stats/IFStaminaComponent.h"
 #include "TimerManager.h"
+
+namespace
+{
+	constexpr float CameraArrivalTolerance = 0.5f;
+}
 
 AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UIFPlayerCombatComponent>(TEXT("Combat")))
 {
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
+	StaminaComponent = CreateDefaultSubobject<UIFStaminaComponent>(TEXT("Stamina"));
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
-	CameraBoom->TargetArmLength = NormalCameraArmLength;
-	CameraBoom->SocketOffset = NormalCameraSocketOffset;
 	CameraBoom->bUsePawnControlRotation = true;
 	CameraBoom->bInheritPitch = false;
 	CameraBoom->bInheritYaw = true;
 	CameraBoom->bInheritRoll = false;
-	CameraBoom->SetRelativeRotation(FRotator(CameraBoomPitch, 0.f, 0.f));
 	CameraBoom->bEnableCameraLag = true;
-	CameraBoom->CameraLagSpeed = CameraLagSpeed;
 	CameraBoom->bEnableCameraRotationLag = true;
+	CameraBoom->bDoCollisionTest = false;
+	CameraBoom->TargetArmLength = NormalCameraArmLength;
+	CameraBoom->SocketOffset = NormalCameraSocketOffset;
+	CameraBoom->SetRelativeRotation(FRotator(CameraBoomPitch, 0.f, 0.f));
+	CameraBoom->CameraLagSpeed = CameraLagSpeed;
 	CameraBoom->CameraRotationLagSpeed = CameraRotationLagSpeed;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
@@ -40,16 +45,10 @@ AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	FollowCamera->bUsePawnControlRotation = false;
 
 	bUseControllerRotationYaw = true;
-	GetCharacterMovement()->bOrientRotationToMovement = false;
-
-	WeaponCollisionBox = CreateDefaultSubobject<UBoxComponent>(TEXT("WeaponCollision"));
-	IFCharacterSetupUtils::ConfigureWeaponCollisionBox(WeaponCollisionBox, GetMesh());
-
-	SwordMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Sword"));
-	IFCharacterSetupUtils::ConfigureCosmeticEquipmentMesh(SwordMesh, GetMesh(), TEXT("weapon_r"));
-
-	ShieldMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Shield"));
-	IFCharacterSetupUtils::ConfigureCosmeticEquipmentMesh(ShieldMesh, GetMesh(), TEXT("weapon_l"));
+	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
+	{
+		Movement->bOrientRotationToMovement = false;
+	}
 }
 
 float AIFPlayerCharacter::GetHealthPercent() const
@@ -68,6 +67,9 @@ void AIFPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Read and preserve the viewport-configured camera defaults so runtime matches the editor.
+	ApplyCameraDefaults();
+
 	if (UWorld* const World = GetWorld())
 	{
 		if (UIFPlayerSubsystem* const Subsystem = World->GetSubsystem<UIFPlayerSubsystem>())
@@ -81,7 +83,27 @@ void AIFPlayerCharacter::BeginPlay()
 		Combat->OnCombatStateChanged.AddDynamic(this, &AIFPlayerCharacter::HandleCombatStateChanged);
 	}
 
+	if (StaminaComponent)
+	{
+		StaminaComponent->OnStaminaDepleted.AddDynamic(this, &AIFPlayerCharacter::HandleStaminaDepleted);
+	}
+
 	UpdateMovementSpeed();
+}
+
+void AIFPlayerCharacter::ApplyCameraDefaults()
+{
+	if (!CameraBoom)
+	{
+		return;
+	}
+
+	NormalCameraArmLength = CameraBoom->TargetArmLength;
+	NormalCameraSocketOffset = CameraBoom->SocketOffset;
+	CameraBoomPitch = CameraBoom->GetRelativeRotation().Pitch;
+	CameraBoom->CameraLagSpeed = CameraLagSpeed;
+	CameraBoom->CameraRotationLagSpeed = CameraRotationLagSpeed;
+	CameraBoom->bDoCollisionTest = false;
 }
 
 void AIFPlayerCharacter::Tick(float DeltaTime)
@@ -101,9 +123,26 @@ void AIFPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	ClearReviveTimers();
 	StopSprint();
 
+	if (DefaultInputMappingContext)
+	{
+		if (APlayerController* const PlayerController = Cast<APlayerController>(GetController()))
+		{
+			if (UEnhancedInputLocalPlayerSubsystem* const InputSubsystem =
+				ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+			{
+				InputSubsystem->RemoveMappingContext(DefaultInputMappingContext);
+			}
+		}
+	}
+
 	if (UIFCombatComponent* const Combat = GetCombatComponent())
 	{
 		Combat->OnCombatStateChanged.RemoveDynamic(this, &AIFPlayerCharacter::HandleCombatStateChanged);
+	}
+
+	if (StaminaComponent)
+	{
+		StaminaComponent->OnStaminaDepleted.RemoveDynamic(this, &AIFPlayerCharacter::HandleStaminaDepleted);
 	}
 
 	if (UWorld* const World = GetWorld())
@@ -128,7 +167,7 @@ void AIFPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 			if (UEnhancedInputLocalPlayerSubsystem* const InputSubsystem =
 				ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 			{
-				InputSubsystem->AddMappingContext(DefaultInputMappingContext, 0);
+				InputSubsystem->AddMappingContext(DefaultInputMappingContext, DefaultInputMappingPriority);
 			}
 		}
 	}
@@ -200,14 +239,10 @@ void AIFPlayerCharacter::OnDeathStarted()
 	bIsCameraTransitioning = true;
 	bUseControllerRotationYaw = false;
 	UpdateTickEnabled();
-}
-
-void AIFPlayerCharacter::OnDeathSequenceStarted()
-{
 	StartReviveTimer();
 }
 
-void AIFPlayerCharacter::OnStaminaDepleted()
+void AIFPlayerCharacter::HandleStaminaDepleted()
 {
 	StopSprint();
 }
@@ -244,11 +279,11 @@ void AIFPlayerCharacter::AttemptRevive()
 	Health->Revive();
 	Health->SetInvincible(true);
 	Combat->HandleOwnerRevived();
-	RestoreCollisionAfterDeath();
+	RestoreAliveState();
 
 	bIsGettingUp = true;
 
-	// AnimBP should call NotifyGetUpFinished; this timer prevents a permanent lockout if that notify is missing.
+	// The AnimBP calls NotifyGetUpFinished; this timer prevents a permanent lockout if that call is missing.
 	if (UWorld* const World = GetWorld())
 	{
 		World->GetTimerManager().SetTimer(GetUpFallbackTimerHandle, this, &AIFPlayerCharacter::NotifyGetUpFinished, GetUpDuration, false);
@@ -301,8 +336,8 @@ void AIFPlayerCharacter::TickCameraTransition(float DeltaTime)
 	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaTime, CameraTransitionInterpSpeed);
 	CameraBoom->SocketOffset = FMath::VInterpTo(CameraBoom->SocketOffset, TargetSocketOffset, DeltaTime, CameraTransitionInterpSpeed);
 
-	const bool bArmLengthReached = FMath::IsNearlyEqual(CameraBoom->TargetArmLength, TargetArmLength, 0.5f);
-	const bool bSocketOffsetReached = CameraBoom->SocketOffset.Equals(TargetSocketOffset, 0.5f);
+	const bool bArmLengthReached = FMath::IsNearlyEqual(CameraBoom->TargetArmLength, TargetArmLength, CameraArrivalTolerance);
+	const bool bSocketOffsetReached = CameraBoom->SocketOffset.Equals(TargetSocketOffset, CameraArrivalTolerance);
 
 	if (bArmLengthReached && bSocketOffsetReached)
 	{

@@ -1,41 +1,29 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "AIController.h"
-#include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BehaviorTreeTypes.h"
-#include "BehaviorTree/BlackboardComponent.h"
-#include "BehaviorTree/BTDecorator.h"
-#include "Character/IFEnemyCharacter.h"
-#include "GameFramework/Actor.h"
 
-/** Default blackboard key name used by enemy BTs and AIFEnemyController. Keep in sync with BB_Enemy. */
-inline FName GetDefaultTargetActorKeyName()
+class AActor;
+class AAIController;
+class AIFEnemyCharacter;
+class UBTDecorator;
+class UBehaviorTreeComponent;
+
+namespace IFAI
 {
-	return FName(TEXT("TargetActor"));
+// Single source of truth for the enemy TargetActor blackboard key name.
+// AIFEnemyController::TargetActorKeyName defaults to this; every BT node
+// TargetActorKey selector must select the same key in the BT asset editor.
+inline const FName TargetActorKey(TEXT("TargetActor"));
 }
 
-inline AActor* GetBlackboardTargetActor(const UBehaviorTreeComponent& OwnerComp, const FBlackboardKeySelector& TargetKey)
-{
-	const UBlackboardComponent* const Blackboard = OwnerComp.GetBlackboardComponent();
-	return Blackboard ? Cast<AActor>(Blackboard->GetValueAsObject(TargetKey.SelectedKeyName)) : nullptr;
-}
+AActor* GetBlackboardTargetActor(const UBehaviorTreeComponent& OwnerComp, const FBlackboardKeySelector& TargetKey);
 
-inline AIFEnemyCharacter* GetControlledEnemy(const UBehaviorTreeComponent& OwnerComp)
-{
-	const AAIController* const AIController = OwnerComp.GetAIOwner();
-	return AIController ? Cast<AIFEnemyCharacter>(AIController->GetPawn()) : nullptr;
-}
+AIFEnemyCharacter* GetControlledEnemy(const UBehaviorTreeComponent& OwnerComp);
 
-inline bool IsWithinRange(const AActor* A, const AActor* B, float Range)
-{
-	if (!A || !B)
-	{
-		return false;
-	}
-	const float CombinedRadius = A->GetSimpleCollisionRadius() + B->GetSimpleCollisionRadius();
-	return FVector::DistSquared(A->GetActorLocation(), B->GetActorLocation()) <= FMath::Square(Range + CombinedRadius);
-}
+float GetActorCombatRadius(const AActor* Actor);
+
+bool IsWithinRange(const AActor* A, const AActor* B, float Range);
 
 /** Instance memory for decorators that re-evaluate continuous world state and abort on change. */
 struct FIFBTConditionMemory
@@ -50,19 +38,4 @@ struct FIFBTConditionMemory
 	}
 };
 
-inline void UpdateConditionDecoratorAbort(UBehaviorTreeComponent& OwnerComp, UBTDecorator* Decorator, uint8* NodeMemory, bool bCurrentResult)
-{
-	FIFBTConditionMemory* const Memory = reinterpret_cast<FIFBTConditionMemory*>(NodeMemory);
-	if (!Memory || !Decorator)
-	{
-		return;
-	}
-
-	const bool bChanged = !Memory->bInitialized || static_cast<bool>(Memory->bLastResult) != bCurrentResult;
-	if (bChanged)
-	{
-		Memory->bInitialized = true;
-		Memory->bLastResult = bCurrentResult;
-		OwnerComp.RequestExecution(Decorator);
-	}
-}
+void UpdateConditionDecoratorAbort(UBehaviorTreeComponent& OwnerComp, UBTDecorator* Decorator, uint8* NodeMemory, bool bCurrentResult);

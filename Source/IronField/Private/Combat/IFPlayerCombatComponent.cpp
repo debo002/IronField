@@ -25,6 +25,72 @@ void UIFPlayerCombatComponent::StartAttack()
 	}
 }
 
+void UIFPlayerCombatComponent::StartBlock()
+{
+	if (!IsIdle() || !HasUsableStamina(MinimumStaminaToStartBlock))
+	{
+		return;
+	}
+
+	if (!BlockMontage)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s StartBlock with no BlockMontage assigned — logic-only block."),
+			*GetNameSafe(GetOwner()));
+	}
+
+	if (!TryPlayBlockMontage())
+	{
+		return;
+	}
+
+	SetCombatState(ECombatState::Blocking);
+
+	if (StaminaComponent)
+	{
+		StaminaComponent->StartContinuousDrain(BlockStaminaDrainRate);
+	}
+}
+
+void UIFPlayerCombatComponent::StopBlock()
+{
+	if (!IsBlocking())
+	{
+		return;
+	}
+
+	SetCombatState(ECombatState::Idle);
+
+	UAnimInstance* const AnimInstance = GetAnimInstance();
+	if (AnimInstance && ActiveBlockMontage)
+	{
+		AnimInstance->Montage_Stop(BlockBlendOutTime, ActiveBlockMontage);
+	}
+
+	ActiveBlockMontage = nullptr;
+
+	if (StaminaComponent)
+	{
+		StaminaComponent->StopContinuousDrain();
+	}
+}
+
+void UIFPlayerCombatComponent::ReceiveAttack(AActor* Instigator, float Damage, TSubclassOf<UDamageType> DamageTypeClass)
+{
+	if (IsDead())
+	{
+		return;
+	}
+
+	const bool bFacing = IsOwnerFacingTarget(Instigator);
+	if (IsBlocking() && bFacing)
+	{
+		PlayBlockReactionMontage();
+		return;
+	}
+
+	Super::ReceiveAttack(Instigator, Damage, DamageTypeClass);
+}
+
 bool UIFPlayerCombatComponent::CanQueueComboAttack() const
 {
 	return !bIsSpinning && Super::CanQueueComboAttack();
@@ -94,16 +160,48 @@ void UIFPlayerCombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	if (StaminaComponent)
 	{
 		StaminaComponent->OnStaminaDepleted.RemoveDynamic(this, &UIFPlayerCombatComponent::HandleStaminaDepleted);
+		StaminaComponent->StopContinuousDrain();
 	}
 
 	StopSpinImmediately();
+
+	UAnimInstance* const AnimInstance = GetAnimInstance();
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockMontage);
+	ActiveBlockMontage = nullptr;
+
 	Super::EndPlay(EndPlayReason);
 }
 
 void UIFPlayerCombatComponent::ResetCombatState()
 {
 	StopSpinImmediately();
+	ActiveBlockMontage = nullptr;
+
+	if (StaminaComponent)
+	{
+		StaminaComponent->StopContinuousDrain();
+	}
+
 	Super::ResetCombatState();
+}
+
+void UIFPlayerCombatComponent::ClearReactionMontageDelegates()
+{
+	Super::ClearReactionMontageDelegates();
+
+	UAnimInstance* const AnimInstance = GetAnimInstance();
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
+}
+
+void UIFPlayerCombatComponent::HandleHitReactionMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	Super::HandleHitReactionMontageEnded(Montage, bInterrupted);
+
+	if (IsBlocking())
+	{
+		TryPlayBlockMontage();
+	}
 }
 
 float UIFPlayerCombatComponent::GetCurrentAttackDamage() const
@@ -147,6 +245,8 @@ void UIFPlayerCombatComponent::StopSpinGracefully()
 void UIFPlayerCombatComponent::StopSpinImmediately()
 {
 	ClearSpinState();
+	EndAttackCollision();
+	ResetRegisteredAttackHits();
 
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, SpinAttackMontage);
@@ -168,10 +268,91 @@ void UIFPlayerCombatComponent::HandleSpinMontageEnded(UAnimMontage* Montage, boo
 	RestoreIdleStateUnlessDead();
 }
 
+void UIFPlayerCombatComponent::HandleBlockReactionMontageEnded(UAnimMontage* Montage, bool)
+{
+	if (Montage != BlockReactionMontage)
+	{
+		return;
+	}
+
+	IFAnimMontageUtils::ClearMontageEndDelegate(GetAnimInstance(), BlockReactionMontage);
+	ActiveBlockMontage = nullptr;
+
+	if (IsBlocking())
+	{
+		StopBlock();
+	}
+}
+
 void UIFPlayerCombatComponent::HandleStaminaDepleted()
 {
 	if (bIsSpinning)
 	{
 		StopSpinGracefully();
 	}
+}
+
+bool UIFPlayerCombatComponent::TryPlayBlockMontage()
+{
+	UAnimInstance* const AnimInstance = GetAnimInstance();
+	if (!AnimInstance || !BlockMontage)
+	{
+		ActiveBlockMontage = nullptr;
+		return true;
+	}
+
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockMontage);
+
+	const float PlayLength = AnimInstance->Montage_Play(BlockMontage);
+	if (PlayLength <= 0.f)
+	{
+		ActiveBlockMontage = nullptr;
+		return false;
+	}
+
+	ActiveBlockMontage = BlockMontage;
+	return true;
+}
+
+void UIFPlayerCombatComponent::PlayBlockReactionMontage()
+{
+	UAnimInstance* const AnimInstance = GetAnimInstance();
+	if (!AnimInstance || !BlockReactionMontage)
+	{
+		return;
+	}
+
+	if (BlockMontage && AnimInstance->Montage_IsPlaying(BlockMontage))
+	{
+		AnimInstance->Montage_Stop(FMath::Max(0.01f, BlockBlendOutTime), BlockMontage);
+	}
+
+	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
+
+	const float PlayLength = AnimInstance->Montage_Play(BlockReactionMontage);
+	if (PlayLength > 0.f)
+	{
+		ActiveBlockMontage = BlockReactionMontage;
+
+		FOnMontageEnded EndDelegate;
+		EndDelegate.BindUObject(this, &UIFPlayerCombatComponent::HandleBlockReactionMontageEnded);
+		AnimInstance->Montage_SetEndDelegate(EndDelegate, BlockReactionMontage);
+	}
+}
+
+bool UIFPlayerCombatComponent::IsOwnerFacingTarget(AActor* TargetActor) const
+{
+	const AActor* const Owner = GetOwner();
+	if (!Owner || !TargetActor)
+	{
+		return false;
+	}
+
+	const FVector DirectionToTarget = (TargetActor->GetActorLocation() - Owner->GetActorLocation()).GetSafeNormal2D();
+	if (DirectionToTarget.IsNearlyZero())
+	{
+		return true;
+	}
+
+	return FVector::DotProduct(Owner->GetActorForwardVector().GetSafeNormal2D(), DirectionToTarget) >= BlockFacingDotThreshold;
 }

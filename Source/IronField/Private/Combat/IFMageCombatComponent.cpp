@@ -2,6 +2,7 @@
 
 #include "Animation/AnimInstance.h"
 #include "Combat/IFProjectile.h"
+#include "Components/CapsuleComponent.h"
 #include "Core/IFAnimMontageUtils.h"
 
 void UIFMageCombatComponent::PlayHitReactionMontage()
@@ -60,10 +61,24 @@ void UIFMageCombatComponent::LaunchProjectileAttack()
 		return;
 	}
 
-	const FVector SpawnLocation = Owner->GetActorLocation() + Owner->GetActorForwardVector() * ProjectileSpawnForwardOffset;
+	// Spawn clear of the shooter's collision. A shot materialized inside the owner
+	// reports its initial overlap during SpawnActor, before InitializeProjectile runs.
+	float ClearanceRadius = ProjectileSpawnForwardOffset;
+	if (const UCapsuleComponent* const OwnerCapsule = Owner->FindComponentByClass<UCapsuleComponent>())
+	{
+		ClearanceRadius = OwnerCapsule->GetScaledCapsuleRadius()
+			+ ProjectileClass->GetDefaultObject<AIFProjectile>()->GetCollisionSphereRadius()
+			+ 20.f;
+	}
+
+	const FVector Forward2D = Owner->GetActorForwardVector().GetSafeNormal2D();
+	const FVector SpawnLocation = Owner->GetActorLocation() + Forward2D * ClearanceRadius;
 	const FRotator SpawnRotation = (Target->GetActorLocation() - SpawnLocation).Rotation();
 
-	AIFProjectile* const Projectile = World->SpawnActor<AIFProjectile>(ProjectileClass, SpawnLocation, SpawnRotation);
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	AIFProjectile* const Projectile = World->SpawnActor<AIFProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, SpawnParams);
 	if (Projectile)
 	{
 		Projectile->InitializeProjectile(Owner, GetCurrentAttackDamage(), GetCurrentDamageTypeClass());

@@ -1,15 +1,9 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Core/IFGameTypes.h"
 #include "Engine/GameInstance.h"
 #include "IFGameInstance.generated.h"
-
-UENUM(BlueprintType)
-enum class EIFRunMode : uint8
-{
-	Normal UMETA(DisplayName = "Normal"),
-	Unlimited UMETA(DisplayName = "Unlimited")
-};
 
 UCLASS()
 class IRONFIELD_API UIFGameInstance : public UGameInstance
@@ -17,8 +11,11 @@ class IRONFIELD_API UIFGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 public:
-	static const FName MainMenuLevelName;
-	static const FName GameplayLevelName;
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "IronField|GameInstance|Levels")
+	FName MainMenuLevelName = TEXT("MainMenu");
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "IronField|GameInstance|Levels")
+	FName GameplayLevelName = TEXT("MainLevel");
 
 	// Survives level travel so the wave manager can read the mode chosen on the menu.
 	UFUNCTION(BlueprintCallable, Category = "IronField|GameInstance|RunMode")

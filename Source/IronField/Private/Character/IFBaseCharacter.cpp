@@ -1,11 +1,12 @@
 #include "Character/IFBaseCharacter.h"
 
+#include "Animation/AnimInstance.h"
 #include "Combat/IFCombatComponent.h"
 #include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Core/IFLog.h"
-#include "Stats/IFHealthComponent.h"
-#include "Stats/IFStaminaComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Stats/IFHealthComponent.h"
 
 AIFBaseCharacter::AIFBaseCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
@@ -13,33 +14,25 @@ AIFBaseCharacter::AIFBaseCharacter(const FObjectInitializer& ObjectInitializer)
 	PrimaryActorTick.bCanEverTick = false;
 
 	HealthComponent = CreateDefaultSubobject<UIFHealthComponent>(TEXT("Health"));
-	StaminaComponent = CreateDefaultSubobject<UIFStaminaComponent>(TEXT("Stamina"));
 	CombatComponent = CreateDefaultSubobject<UIFCombatComponent>(TEXT("Combat"));
 }
-
 
 bool AIFBaseCharacter::IsDead() const
 {
 	return HealthComponent && HealthComponent->IsDead();
 }
 
-bool AIFBaseCharacter::IsBlocking() const
-{
-	return CombatComponent && CombatComponent->IsBlocking();
-}
 
 bool AIFBaseCharacter::IsAttacking() const
 {
 	return CombatComponent && CombatComponent->IsAttacking();
 }
 
-
 void AIFBaseCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Cache the live profile names once so RestoreCollisionAfterDeath() can restore them exactly,
-	// without hardcoding strings that can silently go stale if profiles are renamed.
+	// Cache the live profile names instead of hardcoding strings that can silently go stale.
 	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
 	{
 		CapsuleCollisionProfile = Capsule->GetCollisionProfileName();
@@ -49,7 +42,6 @@ void AIFBaseCharacter::BeginPlay()
 		MeshCollisionProfile = MeshComp->GetCollisionProfileName();
 	}
 
-	// Cache original movement rotation settings
 	if (const UCharacterMovementComponent* const Movement = GetCharacterMovement())
 	{
 		bSavedOrientRotationToMovement = Movement->bOrientRotationToMovement;
@@ -69,7 +61,7 @@ void AIFBaseCharacter::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
 
-	// Corpses keep falling physics until they land, then become fully inert.
+	// Corpses keep falling until they land, then become fully inert.
 	if (HealthComponent && HealthComponent->IsDead())
 	{
 		if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
@@ -79,14 +71,8 @@ void AIFBaseCharacter::Landed(const FHitResult& Hit)
 	}
 }
 
-
 void AIFBaseCharacter::BindGameplayDelegates()
 {
-	if (StaminaComponent)
-	{
-		StaminaComponent->OnStaminaDepleted.AddDynamic(this, &AIFBaseCharacter::HandleStaminaDepleted);
-	}
-
 	if (HealthComponent)
 	{
 		HealthComponent->OnHealthDepleted.AddDynamic(this, &AIFBaseCharacter::HandleDeath);
@@ -95,32 +81,14 @@ void AIFBaseCharacter::BindGameplayDelegates()
 
 void AIFBaseCharacter::UnbindGameplayDelegates()
 {
-	if (StaminaComponent)
-	{
-		StaminaComponent->OnStaminaDepleted.RemoveAll(this);
-	}
-
 	if (HealthComponent)
 	{
 		HealthComponent->OnHealthDepleted.RemoveAll(this);
 	}
 }
 
-void AIFBaseCharacter::HandleStaminaDepleted()
-{
-	if (!CombatComponent)
-	{
-		return;
-	}
-
-	CombatComponent->StopBlock();
-	OnStaminaDepleted();
-}
-
-
 void AIFBaseCharacter::HandleDeath()
 {
-	// bHasDied is the single re-entrancy guard — owned here, not derived from CombatComponent state.
 	if (bHasDied)
 	{
 		return;
@@ -141,12 +109,10 @@ void AIFBaseCharacter::HandleDeath()
 
 	StopMovementForDeath();
 	DisableCollisionForDeath();
-
 	OnDeathStarted();
-	OnCharacterDied.Broadcast(this);
 
-	// After this, death is visual only — AnimBP owns the pose.
-	OnDeathSequenceStarted();
+	// After this point death is visual only; the AnimBP owns the pose.
+	OnCharacterDied.Broadcast(this);
 }
 
 void AIFBaseCharacter::StopMovementForDeath()
@@ -165,7 +131,7 @@ void AIFBaseCharacter::StopMovementForDeath()
 		Movement->DisableMovement();
 	}
 
-	// Stop the controller rotation from continuing to turn the dead pawn.
+	// Stop the controller from continuing to turn the dead pawn.
 	Movement->bUseControllerDesiredRotation = false;
 	Movement->bOrientRotationToMovement = false;
 }
@@ -174,49 +140,48 @@ void AIFBaseCharacter::DisableCollisionForDeath()
 {
 	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
 	{
-		// Keep capsule collision enabled against the environment so it doesn't fall through the ground,
-		// but ignore Pawns so other characters can walk through the corpse.
+		// Keep blocking the environment so the corpse does not fall through the floor,
+		// but let other pawns walk through it.
 		Capsule->SetCollisionResponseToChannel(ECC_Pawn, ECR_Ignore);
 		Capsule->SetCanEverAffectNavigation(false);
 	}
 
-	if (USkeletalMeshComponent* const LocalMesh = GetMesh())
+	if (USkeletalMeshComponent* const MeshComp = GetMesh())
 	{
-		LocalMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		LocalMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-		LocalMesh->SetCanEverAffectNavigation(false);
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		MeshComp->SetCollisionResponseToAllChannels(ECR_Ignore);
+		MeshComp->SetCanEverAffectNavigation(false);
 	}
 }
 
-void AIFBaseCharacter::RestoreCollisionAfterDeath()
+void AIFBaseCharacter::RestoreAliveState()
 {
+	bHasDied = false;
+
 	if (UCapsuleComponent* const Capsule = GetCapsuleComponent())
 	{
 		Capsule->SetCollisionProfileName(CapsuleCollisionProfile);
 		Capsule->SetCanEverAffectNavigation(true);
 	}
 
-	if (USkeletalMeshComponent* const LocalMesh = GetMesh())
+	if (USkeletalMeshComponent* const MeshComp = GetMesh())
 	{
-		LocalMesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		LocalMesh->SetCollisionProfileName(MeshCollisionProfile);
-		LocalMesh->SetCanEverAffectNavigation(true);
+		MeshComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		MeshComp->SetCollisionProfileName(MeshCollisionProfile);
+		MeshComp->SetCanEverAffectNavigation(true);
 	}
 
 	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 	{
 		Movement->SetMovementMode(MOVE_Walking);
 		Movement->FindFloor(GetActorLocation(), Movement->CurrentFloor, false);
-
-		// Restore original movement rotation settings
 		Movement->bOrientRotationToMovement = bSavedOrientRotationToMovement;
 		Movement->bUseControllerDesiredRotation = bSavedUseControllerDesiredRotation;
 	}
 }
 
-
 UAnimInstance* AIFBaseCharacter::GetMeshAnimInstance() const
 {
-	USkeletalMeshComponent* const LocalMesh = GetMesh();
-	return LocalMesh ? LocalMesh->GetAnimInstance() : nullptr;
+	USkeletalMeshComponent* const MeshComp = GetMesh();
+	return MeshComp ? MeshComp->GetAnimInstance() : nullptr;
 }
