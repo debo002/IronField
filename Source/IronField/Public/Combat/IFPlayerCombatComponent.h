@@ -4,6 +4,7 @@
 #include "Combat/IFCombatComponent.h"
 #include "IFPlayerCombatComponent.generated.h"
 
+class AActor;
 class UDamageType;
 
 UCLASS()
@@ -50,8 +51,16 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Stamina", meta = (AllowPrivateAccess = "true"))
 	float MinimumStaminaToStartBlock = 10.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Blocking", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Blocking", meta = (AllowPrivateAccess = "true", ClampMin = "0.0", ClampMax = "1.0"))
 	float BlockBlendOutTime = 0.15f;
+
+	/** Fraction of incoming damage that chips through a successful block (0.1 = 10%). */
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Blocking", meta = (AllowPrivateAccess = "true", ClampMin = "0.0", ClampMax = "1.0"))
+	float BlockChipFraction = 0.1f;
+
+	/** Stamina charged per blocked hit so swarms break guard. */
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Blocking", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
+	float BlockStaminaCostPerHit = 6.f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> ActiveBlockMontage;
@@ -69,7 +78,7 @@ private:
 	FName SpinEndSectionName = TEXT("End");
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Stamina", meta = (AllowPrivateAccess = "true"))
-	float SpinStaminaDrainRate = 15.f;
+	float SpinStaminaDrainRate = 18.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Stamina", meta = (AllowPrivateAccess = "true"))
 	float MinimumStaminaToStartSpin = 5.f;
@@ -78,10 +87,14 @@ private:
 	float SpinBlendOutTime = 0.1f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
-	float SpinDamage = 15.f;
+	float SpinDamage = 12.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Damage", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UDamageType> SpinDamageTypeClass;
+
+	/** Minimum seconds between spin hits on the same target (single long window still re-hits). */
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.05"))
+	float SpinRehitInterval = 0.5f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Combat|State", meta = (AllowPrivateAccess = "true"))
 	bool bIsSpinning = false;
@@ -101,4 +114,11 @@ private:
 	void ClearSpinState();
 	void StopSpinGracefully();
 	void StopSpinImmediately();
+
+protected:
+	virtual bool TryRegisterAttackHit(AActor* TargetActor) override;
+
+private:
+	/** Last spin-hit time per target so one long collision window re-hits on an interval. */
+	TMap<TWeakObjectPtr<AActor>, float> SpinLastHitTimes;
 };

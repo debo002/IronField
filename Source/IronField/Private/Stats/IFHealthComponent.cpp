@@ -39,6 +39,22 @@ void UIFHealthComponent::Revive()
 	SetHealthClamped(FMath::Clamp(ReviveHealth, 1.f, MaxHealth));
 }
 
+void UIFHealthComponent::SetMaxHealth(float NewMaxHealth, bool bFillHealthToMax)
+{
+	MaxHealth = FMath::Max(1.f, NewMaxHealth);
+	ReviveHealth = FMath::Min(ReviveHealth, MaxHealth);
+
+	if (bFillHealthToMax || CurrentHealth > MaxHealth)
+	{
+		SetHealthClamped(bFillHealthToMax ? MaxHealth : CurrentHealth);
+	}
+}
+
+void UIFHealthComponent::SetReviveHealth(float NewReviveHealth)
+{
+	ReviveHealth = FMath::Clamp(NewReviveHealth, 1.f, MaxHealth);
+}
+
 void UIFHealthComponent::BeginPlay()
 {
 	Super::BeginPlay();

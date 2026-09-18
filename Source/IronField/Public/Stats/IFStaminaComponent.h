@@ -44,10 +44,10 @@ private:
 	float MaxStamina = 100.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
-	float StaminaRegenRate = 20.f;
+	float StaminaRegenRate = 30.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
-	float StaminaRegenDelay = 3.5f;
+	float StaminaRegenDelay = 1.75f;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Stamina|Attributes", meta = (AllowPrivateAccess = "true"))
 	float CurrentStamina;

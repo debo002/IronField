@@ -7,11 +7,8 @@
 
 void UIFMageCombatComponent::PlayHitReactionMontage()
 {
-	if (IsAttacking())
-	{
-		return;
-	}
-
+	// Mages are interruptible like melee: casting through focus fire felt unfair
+	// with no player counter at range.
 	Super::PlayHitReactionMontage();
 }
 

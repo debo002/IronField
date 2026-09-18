@@ -1,6 +1,7 @@
 #include "Combat/IFCombatTargetingUtils.h"
 
 #include "AIController.h"
+#include "Building/IFStronghold.h"
 #include "Combat/IFCombatComponent.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/Pawn.h"
@@ -26,6 +27,13 @@ namespace IFCombatTargetingUtils
 		const APawn* const OwnerPawn = Cast<APawn>(InstigatorActor);
 		const APawn* const TargetPawn = Cast<APawn>(TargetActor);
 		if (IsAIControlled(OwnerPawn) && IsAIControlled(TargetPawn))
+		{
+			return nullptr;
+		}
+
+		// The stronghold is the shared objective: only AI enemies may damage it.
+		// This keeps wild player swings/spin next to it from chipping the lose condition.
+		if (Cast<AIFStronghold>(TargetActor) && !IsAIControlled(OwnerPawn))
 		{
 			return nullptr;
 		}

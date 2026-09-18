@@ -12,6 +12,8 @@ class UTextBlock;
  * End-of-run screen shared by victory and defeat. Set the result before adding the
  * widget to the viewport. The Blueprint must contain a TextBlock named ResultTitleText
  * plus RestartButton and MainMenuButton; a missing or misnamed widget fails to compile.
+	* StatsText is optional: an explicit stats line passed to SetResult wins, otherwise the
+ * widget builds "WAVE N - KILLS M" from the wave manager subsystem.
  */
 UCLASS()
 class IRONFIELD_API UIFGameOverScreenWidget : public UUserWidget
@@ -19,7 +21,7 @@ class IRONFIELD_API UIFGameOverScreenWidget : public UUserWidget
 	GENERATED_BODY()
 
 public:
-	void SetResult(EIFGameResult InResult) { Result = InResult; }
+	void SetResult(EIFGameResult InResult, const FText& InStats = FText::GetEmpty()) { Result = InResult; Stats = InStats; }
 
 	UFUNCTION(BlueprintPure, Category = "IronField|UI|GameOver")
 	EIFGameResult GetResult() const { return Result; }
@@ -33,6 +35,9 @@ protected:
 
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UTextBlock> ResultTitleText;
+
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> StatsText;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|UI|GameOver")
 	FText VictoryText = FText::FromString(TEXT("VICTORY"));
@@ -59,6 +64,8 @@ protected:
 
 private:
 	void ApplyResultTitle();
+	void ApplyStatsLine();
 
 	EIFGameResult Result = EIFGameResult::Defeat;
+	FText Stats;
 };

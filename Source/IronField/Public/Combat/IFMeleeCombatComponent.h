@@ -12,11 +12,19 @@ class IRONFIELD_API UIFMeleeCombatComponent : public UIFCombatComponent
 public:
 	virtual float GetComboContinueChance(int32 ComboIndex) const override;
 
+	/** Multiplies per-instance damage for wave scaling. BP damage stays authoritative. */
+	void ApplyDamageScale(float Multiplier) { DamageMultiplier = FMath::Max(0.f, DamageMultiplier * Multiplier); }
+
 protected:
 	virtual bool RequiresWeaponCollisionBox() const override { return true; }
+	virtual float GetCurrentAttackDamage() const override;
 
 private:
 	/** Per-combo-step chance (0-1) to auto-continue after that step ends. Index matches ComboSteps. */
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|AI", meta = (AllowPrivateAccess = "true", ClampMin = "0.0", ClampMax = "1.0"))
-	TArray<float> ComboContinueChances;
+	TArray<float> ComboContinueChances = { 0.45f, 0.3f };
+
+	/** Scales BP-authored ComboStep damage (0.8 x 20 = 16 for default steps). */
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|AI", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
+	float DamageMultiplier = 0.8f;
 };

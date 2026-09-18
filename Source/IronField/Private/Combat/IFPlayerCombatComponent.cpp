@@ -1,8 +1,10 @@
 #include "Combat/IFPlayerCombatComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "Combat/IFCombatTargetingUtils.h"
 #include "Core/IFAnimMontageUtils.h"
 #include "Core/IFLog.h"
+#include "Engine/World.h"
 #include "Stats/IFStaminaComponent.h"
 
 void UIFPlayerCombatComponent::StartAttack()
@@ -84,6 +86,24 @@ void UIFPlayerCombatComponent::ReceiveAttack(AActor* Instigator, float Damage, T
 	const bool bFacing = IsOwnerFacingTarget(Instigator);
 	if (IsBlocking() && bFacing)
 	{
+		// Guard break: swarms force stamina pressure per blocked hit.
+		if (StaminaComponent && BlockStaminaCostPerHit > 0.f && !StaminaComponent->TryConsumeStamina(BlockStaminaCostPerHit))
+		{
+			StopBlock();
+			Super::ReceiveAttack(Instigator, Damage, DamageTypeClass);
+			return;
+		}
+
+		// Chip through the guard so blocking is mitigation, not immunity.
+		if (BlockChipFraction > 0.f && Damage > 0.f)
+		{
+			IFCombatTargetingUtils::ApplyDamageTo(GetOwner(), Instigator, Damage * BlockChipFraction, DamageTypeClass);
+			if (IsDead())
+			{
+				return;
+			}
+		}
+
 		PlayBlockReactionMontage();
 		return;
 	}
@@ -119,6 +139,7 @@ void UIFPlayerCombatComponent::StartSpinAttack()
 
 	bIsSpinning = true;
 	ResetRegisteredAttackHits();
+	SpinLastHitTimes.Reset();
 	SetCombatState(ECombatState::Attacking);
 
 	if (StaminaComponent)
@@ -209,6 +230,32 @@ float UIFPlayerCombatComponent::GetCurrentAttackDamage() const
 	return bIsSpinning ? SpinDamage : Super::GetCurrentAttackDamage();
 }
 
+bool UIFPlayerCombatComponent::TryRegisterAttackHit(AActor* TargetActor)
+{
+	if (!bIsSpinning)
+	{
+		return Super::TryRegisterAttackHit(TargetActor);
+	}
+
+	if (!TargetActor || !IsAttacking())
+	{
+		return false;
+	}
+
+	const UWorld* const World = GetWorld();
+	const float Now = World ? World->GetTimeSeconds() : 0.f;
+	if (const float* const LastHit = SpinLastHitTimes.Find(TargetActor))
+	{
+		if (Now - *LastHit < SpinRehitInterval)
+		{
+			return false;
+		}
+	}
+
+	SpinLastHitTimes.Add(TargetActor, Now);
+	return true;
+}
+
 TSubclassOf<UDamageType> UIFPlayerCombatComponent::GetCurrentDamageTypeClass() const
 {
 	return bIsSpinning ? SpinDamageTypeClass : Super::GetCurrentDamageTypeClass();
@@ -217,6 +264,7 @@ TSubclassOf<UDamageType> UIFPlayerCombatComponent::GetCurrentDamageTypeClass() c
 void UIFPlayerCombatComponent::ClearSpinState()
 {
 	bIsSpinning = false;
+	SpinLastHitTimes.Reset();
 
 	if (StaminaComponent)
 	{
@@ -247,6 +295,7 @@ void UIFPlayerCombatComponent::StopSpinImmediately()
 	ClearSpinState();
 	EndAttackCollision();
 	ResetRegisteredAttackHits();
+	SpinLastHitTimes.Reset();
 
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, SpinAttackMontage);

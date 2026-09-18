@@ -36,6 +36,6 @@ bool UBTDecorator_IFTooClose::CalculateRawConditionValue(UBehaviorTreeComponent&
 	}
 
 	const float Threshold = Enemy->GetCombatRange() * MinRangeFraction;
-	const float DistSq = FVector::DistSquared(Enemy->GetActorLocation(), Target->GetActorLocation());
-	return DistSq < FMath::Square(Threshold);
+	// Same radii-aware math as InAttackRange/MoveTo so the kite band has no jitter seam.
+	return IsWithinRange(Enemy, Target, Threshold);
 }

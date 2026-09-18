@@ -22,6 +22,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "IronField|UI|StatBar")
 	void SetTargetPercent(float NewTargetPercent);
 
+	/** Sets the bar color in code so the designer never has to pick colors. */
+	UFUNCTION(BlueprintCallable, Category = "IronField|UI|StatBar")
+	void SetFillColor(FLinearColor NewColor);
+
 protected:
 	UPROPERTY(meta = (BindWidget))
 	TObjectPtr<UProgressBar> ProgressBar;

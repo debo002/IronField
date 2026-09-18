@@ -32,15 +32,15 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = "IronField|Projectile|Components")
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
 
-	/** Arcade-slow default so projectiles stay visibly dodgeable. */
+	/** Fast enough that sprint can't outrun it, slow enough to stay dodgeable. */
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Movement", meta = (ClampMin = "0.0"))
-	float ProjectileSpeed = 700.f;
+	float ProjectileSpeed = 900.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Movement", meta = (ClampMin = "0.0"))
 	float ProjectileGravityScale = 0.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Lifetime", meta = (ClampMin = "0.1"))
-	float LifeSpanSeconds = 5.f;
+	float LifeSpanSeconds = 4.f;
 
 private:
 	UPROPERTY(Transient)

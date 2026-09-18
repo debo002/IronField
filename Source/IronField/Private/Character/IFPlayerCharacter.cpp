@@ -13,11 +13,6 @@
 #include "Stats/IFStaminaComponent.h"
 #include "TimerManager.h"
 
-namespace
-{
-	constexpr float CameraArrivalTolerance = 0.5f;
-}
-
 AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UIFPlayerCombatComponent>(TEXT("Combat")))
 {
@@ -34,11 +29,6 @@ AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	CameraBoom->bEnableCameraLag = true;
 	CameraBoom->bEnableCameraRotationLag = true;
 	CameraBoom->bDoCollisionTest = false;
-	CameraBoom->TargetArmLength = NormalCameraArmLength;
-	CameraBoom->SocketOffset = NormalCameraSocketOffset;
-	CameraBoom->SetRelativeRotation(FRotator(CameraBoomPitch, 0.f, 0.f));
-	CameraBoom->CameraLagSpeed = CameraLagSpeed;
-	CameraBoom->CameraRotationLagSpeed = CameraRotationLagSpeed;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
@@ -48,6 +38,13 @@ AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 	{
 		Movement->bOrientRotationToMovement = false;
+	}
+
+	// Tuned HP pool: survives ~9 melee hits (16 dmg). BP can still override.
+	if (UIFHealthComponent* const Health = GetHealthComponent())
+	{
+		Health->SetMaxHealth(150.f);
+		Health->SetReviveHealth(60.f);
 	}
 }
 
@@ -66,9 +63,6 @@ float AIFPlayerCharacter::GetStaminaPercent() const
 void AIFPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// Read and preserve the viewport-configured camera defaults so runtime matches the editor.
-	ApplyCameraDefaults();
 
 	if (UWorld* const World = GetWorld())
 	{
@@ -91,21 +85,6 @@ void AIFPlayerCharacter::BeginPlay()
 	UpdateMovementSpeed();
 }
 
-void AIFPlayerCharacter::ApplyCameraDefaults()
-{
-	if (!CameraBoom)
-	{
-		return;
-	}
-
-	NormalCameraArmLength = CameraBoom->TargetArmLength;
-	NormalCameraSocketOffset = CameraBoom->SocketOffset;
-	CameraBoomPitch = CameraBoom->GetRelativeRotation().Pitch;
-	CameraBoom->CameraLagSpeed = CameraLagSpeed;
-	CameraBoom->CameraRotationLagSpeed = CameraRotationLagSpeed;
-	CameraBoom->bDoCollisionTest = false;
-}
-
 void AIFPlayerCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -114,8 +93,6 @@ void AIFPlayerCharacter::Tick(float DeltaTime)
 	{
 		StopSprint();
 	}
-
-	TickCameraTransition(DeltaTime);
 }
 
 void AIFPlayerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -236,7 +213,6 @@ void AIFPlayerCharacter::Jump()
 void AIFPlayerCharacter::OnDeathStarted()
 {
 	StopSprint();
-	bIsCameraTransitioning = true;
 	bUseControllerRotationYaw = false;
 	UpdateTickEnabled();
 	StartReviveTimer();
@@ -317,40 +293,14 @@ void AIFPlayerCharacter::CompleteRevive()
 
 void AIFPlayerCharacter::OnReviveFinished()
 {
-	bIsCameraTransitioning = true;
 	bUseControllerRotationYaw = true;
 	UpdateTickEnabled();
 	UpdateMovementSpeed();
 }
 
-void AIFPlayerCharacter::TickCameraTransition(float DeltaTime)
-{
-	if (!bIsCameraTransitioning || !CameraBoom)
-	{
-		return;
-	}
-
-	const float TargetArmLength = IsDead() ? DeathCameraArmLength : NormalCameraArmLength;
-	const FVector TargetSocketOffset = IsDead() ? DeathCameraSocketOffset : NormalCameraSocketOffset;
-
-	CameraBoom->TargetArmLength = FMath::FInterpTo(CameraBoom->TargetArmLength, TargetArmLength, DeltaTime, CameraTransitionInterpSpeed);
-	CameraBoom->SocketOffset = FMath::VInterpTo(CameraBoom->SocketOffset, TargetSocketOffset, DeltaTime, CameraTransitionInterpSpeed);
-
-	const bool bArmLengthReached = FMath::IsNearlyEqual(CameraBoom->TargetArmLength, TargetArmLength, CameraArrivalTolerance);
-	const bool bSocketOffsetReached = CameraBoom->SocketOffset.Equals(TargetSocketOffset, CameraArrivalTolerance);
-
-	if (bArmLengthReached && bSocketOffsetReached)
-	{
-		CameraBoom->TargetArmLength = TargetArmLength;
-		CameraBoom->SocketOffset = TargetSocketOffset;
-		bIsCameraTransitioning = false;
-		UpdateTickEnabled();
-	}
-}
-
 void AIFPlayerCharacter::UpdateTickEnabled()
 {
-	SetActorTickEnabled(bIsSprinting || bIsCameraTransitioning);
+	SetActorTickEnabled(bIsSprinting);
 }
 
 void AIFPlayerCharacter::Move(const FInputActionValue& Value)
@@ -381,7 +331,17 @@ void AIFPlayerCharacter::Look(const FInputActionValue& Value)
 {
 	const FVector2D LookInput = Value.Get<FVector2D>();
 	AddControllerYawInput(LookInput.X);
-	AddControllerPitchInput(LookInput.Y);
+
+	// The boom ignores controller pitch by design, so tilt it directly within the authored range.
+	if (CameraBoom)
+	{
+		const float PitchInput = bInvertLookPitch ? -LookInput.Y : LookInput.Y;
+		FRotator BoomRotation = CameraBoom->GetRelativeRotation();
+		BoomRotation.Pitch = FMath::Clamp(BoomRotation.Pitch + PitchInput, CameraMinPitch, CameraMaxPitch);
+		BoomRotation.Yaw = 0.f;
+		BoomRotation.Roll = 0.f;
+		CameraBoom->SetRelativeRotation(BoomRotation);
+	}
 }
 
 void AIFPlayerCharacter::StartSprint()

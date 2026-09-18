@@ -29,6 +29,17 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "IronField|Health|Actions")
 	void SetInvincible(bool bNewInvincible) { bIsInvincible = bNewInvincible; }
 
+	/** Sets MaxHealth. Callable in constructors (per-class HP pools) and at runtime (wave scaling). */
+	UFUNCTION(BlueprintCallable, Category = "IronField|Health|Actions")
+	void SetMaxHealth(float NewMaxHealth, bool bFillHealthToMax = true);
+
+	/** Sets the health restored by Revive(). Used for the player revive tuning. */
+	UFUNCTION(BlueprintCallable, Category = "IronField|Health|Actions")
+	void SetReviveHealth(float NewReviveHealth);
+
+	UFUNCTION(BlueprintPure, Category = "IronField|Health|State")
+	float GetMaxHealth() const { return MaxHealth; }
+
 	UFUNCTION(BlueprintPure, Category = "IronField|Health|State")
 	float GetHealthPercent() const { return ComputePercent(CurrentHealth, MaxHealth); }
 

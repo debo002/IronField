@@ -25,6 +25,15 @@ void UIFStatBarWidget::SetTargetPercent(float NewTargetPercent)
 	}
 }
 
+void UIFStatBarWidget::SetFillColor(FLinearColor NewColor)
+{
+	FillColor = NewColor;
+	if (ProgressBar)
+	{
+		ProgressBar->SetFillColorAndOpacity(FillColor);
+	}
+}
+
 void UIFStatBarWidget::NativeConstruct()
 {
 	Super::NativeConstruct();

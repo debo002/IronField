@@ -98,8 +98,7 @@ EBTNodeResult::Type UBTTask_IFMoveAwayFromTarget::ExecuteTask(UBehaviorTreeCompo
 	}
 
 	const float Range = Enemy->GetCombatRange();
-	const float DistSq = FVector::DistSquared(Enemy->GetActorLocation(), Target->GetActorLocation());
-	if (DistSq >= FMath::Square(Range))
+	if (!IsWithinRange(Enemy, Target, Range))
 	{
 		return EBTNodeResult::Succeeded;
 	}
@@ -128,8 +127,7 @@ void UBTTask_IFMoveAwayFromTarget::TickTask(UBehaviorTreeComponent& OwnerComp, u
 	}
 
 	const float Range = Enemy->GetCombatRange();
-	const float DistSq = FVector::DistSquared(Enemy->GetActorLocation(), Target->GetActorLocation());
-	if (DistSq >= FMath::Square(Range * SuccessRangeTolerance))
+	if (!IsWithinRange(Enemy, Target, Range * SuccessRangeTolerance))
 	{
 		AIController->StopMovement();
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);

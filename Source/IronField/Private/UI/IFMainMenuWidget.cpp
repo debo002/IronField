@@ -1,9 +1,21 @@
 #include "UI/IFMainMenuWidget.h"
 
 #include "Components/Button.h"
+#include "Components/TextBlock.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
 #include "Kismet/GameplayStatics.h"
+
+void UIFMainMenuWidget::SetBestText(const FText& InBestText)
+{
+	if (!BestText)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-UI] BestText BindWidget is missing; best-run line will not update."));
+		return;
+	}
+
+	BestText->SetText(InBestText);
+}
 
 void UIFMainMenuWidget::NativeConstruct()
 {
@@ -26,6 +38,9 @@ void UIFMainMenuWidget::NativeConstruct()
 	{
 		UE_LOG(LogIronField, Warning, TEXT("[IF-UI] UnlimitedModeButton BindWidget is missing; unlimited mode cannot be started from the menu."));
 	}
+
+	// Save-system-later placeholder. Real best-run values arrive via SetBestText.
+	SetBestText(FText::FromString(TEXT("BEST: —")));
 }
 
 void UIFMainMenuWidget::NativeDestruct()

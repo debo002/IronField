@@ -2,7 +2,10 @@
 
 #include "Building/IFStronghold.h"
 #include "Character/IFBaseCharacter.h"
+#include "Character/IFEnemyCharacter.h"
 #include "Character/IFPlayerCharacter.h"
+#include "Combat/IFMageCombatComponent.h"
+#include "Combat/IFMeleeCombatComponent.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
 #include "Core/IFPlayerSubsystem.h"
@@ -11,6 +14,7 @@
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Stats/IFHealthComponent.h"
+#include "TimerManager.h"
 #include "Wave/IFEnemySpawnPoint.h"
 
 AIFWaveManager::AIFWaveManager()
@@ -43,6 +47,11 @@ void AIFWaveManager::StartNextWave()
 		return;
 	}
 
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(InterWaveTimerHandle);
+	}
+
 	CurrentWaveIndex++;
 
 	// Unlimited never touches Waves — every wave is UnlimitedBaseWave scaled by index.
@@ -66,10 +75,17 @@ void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
 {
 	UnbindAllSpawnedEnemyDelegates();
 
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(InterWaveTimerHandle);
+		World->GetTimerManager().ClearTimer(SpawnTimerHandle);
+	}
+
 	EnemiesSpawnedSoFar = 0;
 	EnemiesAlive = 0;
 	TotalEnemiesInWave = 0;
 	SpawnedEnemies.Empty();
+	PendingSpawns.Reset();
 	bIsWaveActive = true;
 
 	const int32 WaveNumber = GetCurrentWave();
@@ -78,6 +94,66 @@ void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
 
 	SpawnAllEnemiesInWave(Wave);
 	CompleteWaveIfFinished();
+}
+
+void AIFWaveManager::ScheduleNextWave()
+{
+	UWorld* const World = GetWorld();
+	if (!World || InterWaveDelaySeconds <= 0.f)
+	{
+		StartNextWave();
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(InterWaveTimerHandle, this, &AIFWaveManager::StartNextWave, InterWaveDelaySeconds, false);
+}
+
+void AIFWaveManager::ApplyWaveScaling(AIFBaseCharacter* Enemy) const
+{
+	if (!Enemy || !IsUnlimitedRunMode() || CurrentWaveIndex <= 0)
+	{
+		return;
+	}
+
+	const float HPScale = 1.f + UnlimitedHPScalePerWave * static_cast<float>(CurrentWaveIndex);
+	const float DamageScale = 1.f + UnlimitedDamageScalePerWave * static_cast<float>(CurrentWaveIndex);
+
+	if (UIFHealthComponent* const Health = Enemy->GetHealthComponent())
+	{
+		Health->SetMaxHealth(Health->GetMaxHealth() * HPScale);
+	}
+
+	if (UIFMeleeCombatComponent* const Melee = Enemy->FindComponentByClass<UIFMeleeCombatComponent>())
+	{
+		Melee->ApplyDamageScale(DamageScale);
+	}
+	else if (UIFMageCombatComponent* const Mage = Enemy->FindComponentByClass<UIFMageCombatComponent>())
+	{
+		Mage->ApplyDamageScale(DamageScale);
+	}
+}
+
+FVector AIFWaveManager::PickSpawnLocation(FRotator& OutRotation) const
+{
+	OutRotation = GetActorRotation();
+	FVector SpawnLocation = GetActorLocation();
+
+	if (SpawnPoints.Num() > 0)
+	{
+		if (AActor* const SpawnPoint = SpawnPoints[FMath::RandRange(0, SpawnPoints.Num() - 1)])
+		{
+			SpawnLocation = SpawnPoint->GetActorLocation();
+			OutRotation = SpawnPoint->GetActorRotation();
+		}
+	}
+
+	if (SpawnLocationJitterRadius > 0.f)
+	{
+		SpawnLocation.X += FMath::RandRange(-SpawnLocationJitterRadius, SpawnLocationJitterRadius);
+		SpawnLocation.Y += FMath::RandRange(-SpawnLocationJitterRadius, SpawnLocationJitterRadius);
+	}
+
+	return SpawnLocation;
 }
 
 bool AIFWaveManager::IsUnlimitedRunMode() const
@@ -125,65 +201,89 @@ void AIFWaveManager::CacheSpawnPoints()
 
 void AIFWaveManager::SpawnAllEnemiesInWave(const FWaveDefinition& Wave)
 {
-	UWorld* const World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
+	BuildSpawnQueue(Wave);
 
-	TotalEnemiesInWave = 0;
-	for (const FEnemyGroupDefinition& Group : Wave.EnemyGroups)
+	UWorld* const World = GetWorld();
+	if (World && PendingSpawns.Num() > 0 && SpawnIntervalSeconds > 0.f)
 	{
-		TotalEnemiesInWave += Group.EnemyCount;
+		// First spawn waits out the wave banner so a wave never instant-contacts.
+		World->GetTimerManager().SetTimer(SpawnTimerHandle, this, &AIFWaveManager::TrySpawnPending, SpawnIntervalSeconds, true, SpawnStartDelaySeconds);
 	}
+	else
+	{
+		// No timer possible (or nothing queued): spawn synchronously so the wave cannot stall.
+		TrySpawnPending();
+	}
+}
+
+void AIFWaveManager::BuildSpawnQueue(const FWaveDefinition& Wave)
+{
+	PendingSpawns.Reset();
+	TotalEnemiesInWave = 0;
 
 	for (const FEnemyGroupDefinition& Group : Wave.EnemyGroups)
 	{
 		if (!Group.EnemyClass)
 		{
 			UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Wave %d has an enemy group with no Enemy Class — skipping."), GetCurrentWave());
-			// Keep the completion target honest when a group cannot spawn.
-			TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - Group.EnemyCount);
 			continue;
 		}
 
 		for (int32 i = 0; i < Group.EnemyCount; ++i)
 		{
-			FVector SpawnLocation = GetActorLocation();
-			FRotator SpawnRotation = GetActorRotation();
-
-			if (SpawnPoints.Num() > 0)
-			{
-				if (AActor* const SpawnPoint = SpawnPoints[FMath::RandRange(0, SpawnPoints.Num() - 1)])
-				{
-					SpawnLocation = SpawnPoint->GetActorLocation();
-					SpawnRotation = SpawnPoint->GetActorRotation();
-				}
-			}
-
-			if (SpawnLocationJitterRadius > 0.f)
-			{
-				SpawnLocation.X += FMath::RandRange(-SpawnLocationJitterRadius, SpawnLocationJitterRadius);
-				SpawnLocation.Y += FMath::RandRange(-SpawnLocationJitterRadius, SpawnLocationJitterRadius);
-			}
-
-			FActorSpawnParameters SpawnParams;
-			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-			AIFBaseCharacter* const SpawnedEnemy = World->SpawnActor<AIFBaseCharacter>(Group.EnemyClass, SpawnLocation, SpawnRotation, SpawnParams);
-			if (SpawnedEnemy)
-			{
-				EnemiesSpawnedSoFar++;
-				NotifyEnemySpawned(SpawnedEnemy);
-			}
-			else
-			{
-				TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - 1);
-				UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Failed to spawn %s at %s"),
-					*Group.EnemyClass->GetName(), *SpawnLocation.ToString());
-			}
+			PendingSpawns.Add(Group.EnemyClass);
 		}
 	}
+
+	TotalEnemiesInWave = PendingSpawns.Num();
+}
+
+void AIFWaveManager::TrySpawnPending()
+{
+	UWorld* const World = GetWorld();
+	if (!World || !bIsWaveActive)
+	{
+		return;
+	}
+
+	const int32 CappedMax = FMath::Max(1, MaxConcurrentAlive);
+	while (PendingSpawns.Num() > 0 && EnemiesAlive < CappedMax)
+	{
+		const TSubclassOf<AIFBaseCharacter> EnemyClass = PendingSpawns[0];
+		PendingSpawns.RemoveAt(0);
+
+		if (!EnemyClass)
+		{
+			TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - 1);
+			continue;
+		}
+
+		FRotator SpawnRotation;
+		const FVector SpawnLocation = PickSpawnLocation(SpawnRotation);
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		AIFBaseCharacter* const SpawnedEnemy = World->SpawnActor<AIFBaseCharacter>(EnemyClass, SpawnLocation, SpawnRotation, SpawnParams);
+		if (SpawnedEnemy)
+		{
+			EnemiesSpawnedSoFar++;
+			NotifyEnemySpawned(SpawnedEnemy);
+		}
+		else
+		{
+			TotalEnemiesInWave = FMath::Max(0, TotalEnemiesInWave - 1);
+			UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Failed to spawn %s at %s"),
+				*EnemyClass->GetName(), *SpawnLocation.ToString());
+		}
+	}
+
+	if (PendingSpawns.Num() <= 0)
+	{
+		World->GetTimerManager().ClearTimer(SpawnTimerHandle);
+	}
+
+	CompleteWaveIfFinished();
 }
 
 void AIFWaveManager::NotifyEnemySpawned(AIFBaseCharacter* Enemy)
@@ -192,6 +292,8 @@ void AIFWaveManager::NotifyEnemySpawned(AIFBaseCharacter* Enemy)
 	{
 		return;
 	}
+
+	ApplyWaveScaling(Enemy);
 
 	SpawnedEnemies.Add(Enemy);
 	EnemiesAlive++;
@@ -202,7 +304,7 @@ void AIFWaveManager::NotifyEnemySpawned(AIFBaseCharacter* Enemy)
 
 void AIFWaveManager::CompleteWaveIfFinished()
 {
-	if (!bIsWaveActive || EnemiesAlive > 0 || EnemiesSpawnedSoFar < TotalEnemiesInWave)
+	if (!bIsWaveActive || EnemiesAlive > 0 || PendingSpawns.Num() > 0 || EnemiesSpawnedSoFar < TotalEnemiesInWave)
 	{
 		return;
 	}
@@ -210,6 +312,7 @@ void AIFWaveManager::CompleteWaveIfFinished()
 	if (TotalEnemiesInWave <= 0)
 	{
 		// Empty or all-invalid waves never spawn, so HandleEnemyDied cannot complete them.
+		// The breather timer below keeps this from recursing into the next wave same-frame.
 		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Wave %d has no spawnable enemies; completing immediately."), GetCurrentWave());
 	}
 
@@ -219,7 +322,7 @@ void AIFWaveManager::CompleteWaveIfFinished()
 	OnWaveCompleted.Broadcast(WaveNumber);
 
 	CleanupWaveCorpses();
-	StartNextWave();
+	ScheduleNextWave();
 }
 
 void AIFWaveManager::HandleEnemyDied(AIFBaseCharacter* DeadEnemy)
@@ -234,6 +337,11 @@ void AIFWaveManager::HandleEnemyDied(AIFBaseCharacter* DeadEnemy)
 	EnemiesAlive = FMath::Max(0, EnemiesAlive - 1);
 	OnEnemiesAliveCountChanged.Broadcast(EnemiesAlive);
 
+	KillCount++;
+	OnKillCountChanged.Broadcast(KillCount);
+
+	// Refill concurrency from the queue as the player scores kills.
+	TrySpawnPending();
 	CompleteWaveIfFinished();
 }
 
@@ -298,7 +406,8 @@ void AIFWaveManager::BeginPlay()
 
 	if (bAutoStartOnBeginPlay)
 	{
-		StartNextWave();
+		// Opening grace: the run breathes before wave 1 instead of spawning on frame one.
+		World->GetTimerManager().SetTimer(InterWaveTimerHandle, this, &AIFWaveManager::StartNextWave, InitialWaveStartDelaySeconds, false);
 	}
 }
 
@@ -315,6 +424,9 @@ void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		{
 			PlayerSubsystem->OnPlayerRegistered.RemoveDynamic(this, &AIFWaveManager::HandlePlayerRegistered);
 		}
+
+		World->GetTimerManager().ClearTimer(InterWaveTimerHandle);
+		World->GetTimerManager().ClearTimer(SpawnTimerHandle);
 	}
 
 	UnbindPlayer();

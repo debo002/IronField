@@ -21,6 +21,9 @@ public:
 	virtual void BeginAttackCollision() override {}
 	virtual void EndAttackCollision() override {}
 
+	/** Multiplies per-instance damage for wave scaling. */
+	void ApplyDamageScale(float Multiplier) { AttackDamage = FMath::Max(0.f, AttackDamage * Multiplier); }
+
 protected:
 	virtual float GetCurrentAttackDamage() const override { return AttackDamage; }
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override { return DamageTypeClass; }
@@ -38,7 +41,7 @@ private:
 	float ProjectileSpawnForwardOffset = 60.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
-	float AttackDamage = 12.f;
+	float AttackDamage = 10.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Damage", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<UDamageType> DamageTypeClass;

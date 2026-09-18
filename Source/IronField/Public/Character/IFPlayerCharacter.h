@@ -79,7 +79,7 @@ protected:
 	float WalkSpeed = 375.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Movement")
-	float BackpedalSpeed = 200.f;
+	float BackpedalSpeed = 240.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Movement")
 	float BlockingSpeed = 250.f;
@@ -88,7 +88,7 @@ protected:
 	float SprintSpeed = 620.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Movement")
-	float AttackMoveSpeed = 260.f;
+	float AttackMoveSpeed = 300.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Movement")
 	float SprintInputThreshold = 0.5f;
@@ -97,7 +97,16 @@ protected:
 	float BackpedalInputThreshold = -0.1f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Movement")
-	float SprintExitSpeedSquared = 100.f;
+	float SprintExitSpeedSquared = 10000.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera", meta = (ClampMin = "-89.0", ClampMax = "-10.0"))
+	float CameraMinPitch = -75.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera", meta = (ClampMin = "-89.0", ClampMax = "-10.0"))
+	float CameraMaxPitch = -40.f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
+	bool bInvertLookPitch = false;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Stamina")
 	float SprintStaminaDrainRate = 10.f;
@@ -105,35 +114,11 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Stamina")
 	float MinimumStaminaToStartSprint = 1.f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	float NormalCameraArmLength = 700.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	FVector NormalCameraSocketOffset = FVector(0.f, 0.f, 80.f);
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	float DeathCameraArmLength = 800.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	FVector DeathCameraSocketOffset = FVector(0.f, 0.f, 120.f);
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	float CameraTransitionInterpSpeed = 3.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	float CameraBoomPitch = -52.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	float CameraLagSpeed = 10.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Camera")
-	float CameraRotationLagSpeed = 12.f;
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Gameplay")
+	float ReviveDelaySeconds = 6.f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Gameplay")
-	float ReviveDelaySeconds = 10.f;
-
-	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Gameplay")
-	float GetUpDuration = 2.5f;
+	float GetUpDuration = 1.5f;
 
 	virtual void OnDeathStarted() override;
 	void OnReviveFinished();
@@ -150,9 +135,6 @@ private:
 
 	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Player|Movement", meta = (AllowPrivateAccess = "true"))
 	bool bIsSprinting = false;
-
-	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Player|Camera", meta = (AllowPrivateAccess = "true"))
-	bool bIsCameraTransitioning = false;
 
 	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Player|Movement", meta = (AllowPrivateAccess = "true"))
 	FVector2D CachedMovementInput = FVector2D::ZeroVector;
@@ -180,13 +162,11 @@ private:
 	UFUNCTION()
 	void HandleCombatStateChanged(ECombatState PreviousState, ECombatState NewState);
 
-	void ApplyCameraDefaults();
 	void UpdateMovementSpeed();
 	bool HasSprintInput() const;
 	float CalculateDesiredMovementSpeed() const;
 	UIFPlayerCombatComponent* GetPlayerCombatComponent() const;
 
-	void TickCameraTransition(float DeltaTime);
 	void UpdateTickEnabled();
 
 	void ClearReviveTimers();

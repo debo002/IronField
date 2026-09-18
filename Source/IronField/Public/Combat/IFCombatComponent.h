@@ -146,9 +146,12 @@ private:
 	void HandleWeaponBoxBeginOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
 	void ResolveAttackHit(AActor* TargetActor);
-	bool TryRegisterAttackHit(AActor* TargetActor);
 	/** Health component only when attack collision is active and the target is legally hittable. */
 	UIFHealthComponent* GetValidActiveAttackTargetHealth(AActor* TargetActor) const;
 	void ResolveWeaponCollisionBox();
 	void SetWeaponCollisionEnabled(bool bEnabled) const;
+
+protected:
+	/** Single-hit gate per attack window. Virtual so spin can allow timed re-hits. */
+	virtual bool TryRegisterAttackHit(AActor* TargetActor);
 };

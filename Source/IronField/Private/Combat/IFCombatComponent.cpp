@@ -1,6 +1,8 @@
 #include "Combat/IFCombatComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "AIController.h"
+#include "Character/IFEnemyCharacter.h"
 #include "Combat/IFCombatTargetingUtils.h"
 #include "Components/BoxComponent.h"
 #include "Components/BoxComponent.h"
@@ -139,6 +141,19 @@ void UIFCombatComponent::ReceiveAttack(AActor* Instigator, float Damage, TSubcla
 		return;
 	}
 
+	// Retaliation: a player-caused hit stamps a grudge on enemies so the AI can turn on its attacker.
+	if (const APawn* const InstigatorPawn = Cast<APawn>(Instigator))
+	{
+		const bool bFromPlayer = Cast<AAIController>(InstigatorPawn->GetController()) == nullptr;
+		if (bFromPlayer)
+		{
+			if (AIFEnemyCharacter* const EnemyOwner = Cast<AIFEnemyCharacter>(Owner))
+			{
+				EnemyOwner->NotifyHitByPlayer();
+			}
+		}
+	}
+
 	PlayHitReactionMontage();
 }
 
@@ -168,7 +183,7 @@ void UIFCombatComponent::BeginPlay()
 	}
 	else if (RequiresWeaponCollisionBox())
 	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has no weapon box; add one Box parented to the weapon (see Docs/CombatCollisionSetup.md)."), *GetNameSafe(Owner));
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s has no weapon box; add one Box Collision parented to the weapon (see README)."), *GetNameSafe(Owner));
 	}
 }
 

@@ -15,6 +15,10 @@ AIFStronghold::AIFStronghold()
 	MeshComponent->SetCanEverAffectNavigation(false);
 
 	HealthComponent = CreateDefaultSubobject<UIFHealthComponent>(TEXT("HealthComponent"));
+
+	// Sole lose condition: survives ~50 melee hits @16 / ~80 mage hits @10.
+	// Pure HP pool (no regen); shop repair comes later. BP can still override.
+	HealthComponent->SetMaxHealth(800.f);
 }
 
 void AIFStronghold::BeginPlay()

@@ -48,7 +48,7 @@ bool IsWithinRange(const AActor* A, const AActor* B, float Range)
 	return FVector::DistSquared(A->GetActorLocation(), B->GetActorLocation()) <= FMath::Square(Range + CombinedRadius);
 }
 
-void UpdateConditionDecoratorAbort(UBehaviorTreeComponent& OwnerComp, UBTDecorator* Decorator, uint8* NodeMemory, bool bCurrentResult)
+void UpdateConditionDecoratorAbort(UBehaviorTreeComponent& OwnerComp, UBTDecorator*		Decorator, uint8* NodeMemory, bool bCurrentResult)
 {
 	FIFBTConditionMemory* const Memory = reinterpret_cast<FIFBTConditionMemory*>(NodeMemory);
 	if (!Memory || !Decorator)

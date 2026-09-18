@@ -5,6 +5,7 @@
 #include "BehaviorTree/BlackboardComponent.h"
 #include "Combat/IFMageCombatComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Stats/IFHealthComponent.h"
 
 AIFMageEnemyCharacter::AIFMageEnemyCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer
@@ -13,7 +14,13 @@ AIFMageEnemyCharacter::AIFMageEnemyCharacter(const FObjectInitializer& ObjectIni
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	CombatRange = 850.f;
+	CombatRange = 700.f;
+
+	// 2 player combo hits to kill. BP can still override.
+	if (UIFHealthComponent* const Health = GetHealthComponent())
+	{
+		Health->SetMaxHealth(50.f);
+	}
 
 	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 	{

@@ -4,7 +4,10 @@
 #include "Components/TextBlock.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
+#include "Core/IFWaveManagerSubsystem.h"
+#include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Wave/IFWaveManager.h"
 
 void UIFGameOverScreenWidget::NativeConstruct()
 {
@@ -21,6 +24,7 @@ void UIFGameOverScreenWidget::NativeConstruct()
 	}
 
 	ApplyResultTitle();
+	ApplyStatsLine();
 }
 
 void UIFGameOverScreenWidget::NativeDestruct()
@@ -49,6 +53,35 @@ void UIFGameOverScreenWidget::ApplyResultTitle()
 	const bool bVictory = Result == EIFGameResult::Victory;
 	ResultTitleText->SetText(bVictory ? VictoryText : DefeatText);
 	ResultTitleText->SetColorAndOpacity(bVictory ? VictoryColor : DefeatColor);
+}
+
+void UIFGameOverScreenWidget::ApplyStatsLine()
+{
+	if (!StatsText)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-UI] StatsText BindWidget is missing; the run stats line will not update."));
+		return;
+	}
+
+	// Explicit stats passed to SetResult always win (keeps future callers flexible).
+	if (!Stats.IsEmpty())
+	{
+		StatsText->SetText(Stats);
+		return;
+	}
+
+	// Default path: build "WAVE N - KILLS M" from the live wave manager so the
+	// existing ShowGameOverScreen(Result) caller needs no change.
+	const UWorld* const World = GetWorld();
+	const UIFWaveManagerSubsystem* const Subsystem = World ? World->GetSubsystem<UIFWaveManagerSubsystem>() : nullptr;
+	const AIFWaveManager* const WaveManager = Subsystem ? Subsystem->GetWaveManager() : nullptr;
+	if (!WaveManager)
+	{
+		return;
+	}
+
+	const int32 WaveNumber = FMath::Max(1, WaveManager->GetCurrentWave());
+	StatsText->SetText(FText::FromString(FString::Printf(TEXT("WAVE %d  •  KILLS %d"), WaveNumber, WaveManager->GetKillCount())));
 }
 
 void UIFGameOverScreenWidget::UnpauseAndOpenLevel(FName LevelName)
