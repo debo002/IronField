@@ -7,6 +7,8 @@
 
 class AIFPlayerCharacter;
 class AIFBaseCharacter;
+class USoundBase;
+class UNiagaraSystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerDowned);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaveStarted, int32, WaveNumber);
@@ -83,7 +85,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
 	float SpawnLocationJitterRadius = 150.f;
 
-	/** Breather between waves so the run has rhythm (shop phase comes later). */
+	/** Breather between waves so the run has rhythm. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
 	float InterWaveDelaySeconds = 8.f;
 
@@ -103,12 +105,23 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "1"))
 	int32 MaxConcurrentAlive = 5;
 
+	/** How often the active wave reconciles its alive-count against live enemies. 0 disables. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
+	float WaveValidationIntervalSeconds = 2.f;
+
 	/** Unlimited stat pressure per wave index (wave 1 = unscaled). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
 	float UnlimitedHPScalePerWave = 0.08f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
 	float UnlimitedDamageScalePerWave = 0.03f;
+
+	// Empty until assigned in Blueprint; guarded at play time.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Feedback")
+	TObjectPtr<USoundBase> WaveStartSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Feedback")
+	TObjectPtr<UNiagaraSystem> WaveStartVFX;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Wave|State")
 	int32 TotalEnemiesInWave = 0;
@@ -168,19 +181,32 @@ private:
 
 	FTimerHandle InterWaveTimerHandle;
 	FTimerHandle SpawnTimerHandle;
+	FTimerHandle ValidateTimerHandle;
+
+	// Generation counter for async identity: bumped on every BeginWaveFromDefinition
+	// and EndPlay; timer delegates capture the scheduling generation and drop stale firings.
+	uint32 WaveGeneration = 0;
 
 	void NotifyEnemySpawned(AIFBaseCharacter* Enemy);
 	void SpawnAllEnemiesInWave(const FWaveDefinition& Wave);
 	void BuildSpawnQueue(const FWaveDefinition& Wave);
 	UFUNCTION()
 	void TrySpawnPending();
+	UFUNCTION()
+	void HandleInterWaveTimer(uint32 ScheduledGeneration);
+	UFUNCTION()
+	void HandleSpawnTimerTick(uint32 ScheduledGeneration);
+	UFUNCTION()
+	void HandleValidateTimer(uint32 ScheduledGeneration);
 	void ScheduleNextWave();
 	void ApplyWaveScaling(AIFBaseCharacter* Enemy) const;
 	FVector PickSpawnLocation(FRotator& OutRotation) const;
 	bool IsUnlimitedRunMode() const;
 	FWaveDefinition BuildUnlimitedWave(int32 WaveIndex) const;
 	void BeginWaveFromDefinition(const FWaveDefinition& Wave);
+	void PlayWaveStartFeedback() const;
 	void CompleteWaveIfFinished();
+	void ValidateWaveState();
 	void CleanupWaveCorpses();
 	void UnbindAllSpawnedEnemyDelegates();
 	void CacheSpawnPoints();

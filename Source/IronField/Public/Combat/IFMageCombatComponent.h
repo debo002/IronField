@@ -28,7 +28,6 @@ protected:
 	virtual float GetCurrentAttackDamage() const override { return AttackDamage; }
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override { return DamageTypeClass; }
 	virtual bool CanQueueComboAttack() const override { return false; }
-	virtual void PlayHitReactionMontage() override;
 
 private:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Cast", meta = (AllowPrivateAccess = "true"))
@@ -39,6 +38,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Projectile", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float ProjectileSpawnForwardOffset = 60.f;
+
+	// Live blackboard target first, attack-start target as fallback.
+	AActor* ResolveLiveTarget() const;
 
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Damage", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float AttackDamage = 10.f;

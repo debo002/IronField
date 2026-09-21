@@ -34,6 +34,7 @@ private:
 	void HandleStrongholdDestroyed(AIFStronghold* Stronghold);
 
 	void ShowGameOver(EIFGameResult Result);
+	void SaveBestRun(EIFGameResult Result);
 
 	// The game mode begins play before level actors register with the subsystems,
 	// so game-flow delegates are bound either immediately or on registration.

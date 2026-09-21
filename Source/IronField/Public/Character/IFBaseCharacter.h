@@ -7,6 +7,8 @@
 class UAnimInstance;
 class UIFCombatComponent;
 class UIFHealthComponent;
+class USoundBase;
+class UNiagaraSystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnCharacterDied, AIFBaseCharacter*, Character);
 
@@ -41,6 +43,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Character|Animation")
 	float DeathMontageBlendOutTime = 0.15f;
 
+	// Empty until assigned in Blueprint; guarded at play time.
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Character|Feedback")
+	TObjectPtr<USoundBase> DeathSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Character|Feedback")
+	TObjectPtr<UNiagaraSystem> DeathVFX;
+
 	virtual void OnDeathStarted() {}
 
 	UAnimInstance* GetMeshAnimInstance() const;
@@ -63,6 +72,7 @@ private:
 
 	void BindGameplayDelegates();
 	void UnbindGameplayDelegates();
+	void PlayDeathFeedback() const;
 
 	// Death re-entrancy guard; cleared by RestoreAliveState so a revived character can die again.
 	bool bHasDied = false;

@@ -2,11 +2,14 @@
 
 #include "Building/IFStronghold.h"
 #include "Character/IFPlayerCharacter.h"
+#include "Core/IFBestRunSave.h"
+#include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
 #include "Core/IFPlayerController.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Core/IFWaveManagerSubsystem.h"
 #include "Engine/World.h"
+#include "Kismet/GameplayStatics.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Wave/IFWaveManager.h"
 
@@ -143,6 +146,8 @@ void AIFGameMode::ShowGameOver(EIFGameResult Result)
 		return;
 	}
 
+	SaveBestRun(Result);
+
 	AIFPlayerController* const PlayerController = Cast<AIFPlayerController>(World->GetFirstPlayerController());
 	if (!PlayerController)
 	{
@@ -150,4 +155,57 @@ void AIFGameMode::ShowGameOver(EIFGameResult Result)
 	}
 
 	PlayerController->ShowGameOverScreen(Result);
+}
+
+void AIFGameMode::SaveBestRun(EIFGameResult Result)
+{
+	if (!BoundWaveManager)
+	{
+		return;
+	}
+
+	UIFGameInstance* const GameInstance = Cast<UIFGameInstance>(GetGameInstance());
+	if (!GameInstance)
+	{
+		return;
+	}
+
+	const int32 WaveNumber = FMath::Max(1, BoundWaveManager->GetCurrentWave());
+	const int32 KillCount = BoundWaveManager->GetKillCount();
+	const EIFRunMode RunMode = GameInstance->GetRunMode();
+	const FString SlotName = UIFBestRunSave::GetSlotName();
+
+	UIFBestRunSave* Save = Cast<UIFBestRunSave>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
+	if (!Save)
+	{
+		Save = NewObject<UIFBestRunSave>(this);
+	}
+	if (!Save)
+	{
+		return;
+	}
+
+	// Higher wave wins; kills break ties so late pushes still record.
+	if (RunMode == EIFRunMode::Normal)
+	{
+		if (WaveNumber > Save->BestNormalWave || (WaveNumber == Save->BestNormalWave && KillCount > Save->BestNormalKills))
+		{
+			Save->BestNormalWave = WaveNumber;
+			Save->BestNormalKills = KillCount;
+		}
+		if (Result == EIFGameResult::Victory)
+		{
+			Save->bNormalCleared = true;
+		}
+	}
+	else
+	{
+		if (WaveNumber > Save->BestUnlimitedWave || (WaveNumber == Save->BestUnlimitedWave && KillCount > Save->BestUnlimitedKills))
+		{
+			Save->BestUnlimitedWave = WaveNumber;
+			Save->BestUnlimitedKills = KillCount;
+		}
+	}
+
+	UGameplayStatics::SaveGameToSlot(Save, SlotName, 0);
 }

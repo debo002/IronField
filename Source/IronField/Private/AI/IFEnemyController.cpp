@@ -50,6 +50,10 @@ void AIFEnemyController::InitializeControlledPawn()
 	{
 		RunBehaviorTree(BehaviorTreeAsset);
 	}
+	else
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s has no BehaviorTreeAsset; enemy will idle but still count alive for the wave."), *GetName());
+	}
 
 	if (const UWorld* const World = GetWorld())
 	{
@@ -57,6 +61,11 @@ void AIFEnemyController::InitializeControlledPawn()
 		{
 			CachedWaveManager = Subsystem->GetWaveManager();
 		}
+	}
+
+	if (!CachedWaveManager)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-AI] %s possessed before WaveManager registered; siege bias is 0 and player-downed will not clear its target."), *GetName());
 	}
 
 	if (CachedWaveManager)
@@ -99,7 +108,8 @@ void AIFEnemyController::BindOwnDelegates()
 		Combat->OnCombatStateChanged.AddDynamic(this, &AIFEnemyController::HandleOwnCombatStateChanged);
 	}
 
-	if (UIFHealthComponent* const Health = ControlledPawn->FindComponentByClass<UIFHealthComponent>())
+	CachedHealthComponent = ControlledPawn->FindComponentByClass<UIFHealthComponent>();
+	if (UIFHealthComponent* const Health = CachedHealthComponent)
 	{
 		Health->OnHealthDepleted.AddDynamic(this, &AIFEnemyController::HandleOwnHealthDepleted);
 	}
@@ -112,13 +122,11 @@ void AIFEnemyController::UnbindOwnDelegates()
 		Combat->OnCombatStateChanged.RemoveAll(this);
 	}
 
-	if (const APawn* const ControlledPawn = GetPawn())
+	if (UIFHealthComponent* const Health = CachedHealthComponent)
 	{
-		if (UIFHealthComponent* const Health = ControlledPawn->FindComponentByClass<UIFHealthComponent>())
-		{
-			Health->OnHealthDepleted.RemoveAll(this);
-		}
+		Health->OnHealthDepleted.RemoveAll(this);
 	}
+	CachedHealthComponent = nullptr;
 
 	if (CachedWaveManager)
 	{

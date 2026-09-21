@@ -2,6 +2,7 @@
 
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Core/IFBestRunSave.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
 #include "Kismet/GameplayStatics.h"
@@ -39,8 +40,17 @@ void UIFMainMenuWidget::NativeConstruct()
 		UE_LOG(LogIronField, Warning, TEXT("[IF-UI] UnlimitedModeButton BindWidget is missing; unlimited mode cannot be started from the menu."));
 	}
 
-	// Save-system-later placeholder. Real best-run values arrive via SetBestText.
-	SetBestText(FText::FromString(TEXT("BEST: —")));
+	// Single sync slot; missing slot shows the empty combined line.
+	const FString SlotName = UIFBestRunSave::GetSlotName();
+	const UIFBestRunSave* const Save = Cast<UIFBestRunSave>(UGameplayStatics::LoadGameFromSlot(SlotName, 0));
+	if (!Save)
+	{
+		const UIFBestRunSave* const DefaultSave = NewObject<UIFBestRunSave>(this);
+		SetBestText(DefaultSave ? DefaultSave->BuildBestText() : FText::FromString(TEXT("BEST: \u2014")));
+		return;
+	}
+
+	SetBestText(Save->BuildBestText());
 }
 
 void UIFMainMenuWidget::NativeDestruct()

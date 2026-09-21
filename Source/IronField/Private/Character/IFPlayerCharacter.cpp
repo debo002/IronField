@@ -3,6 +3,8 @@
 #include "Camera/CameraComponent.h"
 #include "Combat/IFCombatComponent.h"
 #include "Combat/IFPlayerCombatComponent.h"
+#include "Core/IFLog.h"
+#include "Core/IFPlayerController.h"
 #include "Core/IFPlayerSubsystem.h"
 #include "Engine/World.h"
 #include "EnhancedInputComponent.h"
@@ -198,6 +200,13 @@ void AIFPlayerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputC
 		EnhancedInput->BindAction(SpinAttackInputAction, ETriggerEvent::Completed, this, &AIFPlayerCharacter::StopSpinAttack);
 		EnhancedInput->BindAction(SpinAttackInputAction, ETriggerEvent::Canceled, this, &AIFPlayerCharacter::StopSpinAttack);
 	}
+
+	if (PauseInputAction)
+	{
+		EnhancedInput->BindAction(PauseInputAction, ETriggerEvent::Started, this, &AIFPlayerCharacter::RequestPauseToggle);
+		// Pause must also fire while paused so the same key unpauses.
+		PlayerInputComponent->SetTickableWhenPaused(true);
+	}
 }
 
 void AIFPlayerCharacter::Jump()
@@ -249,6 +258,8 @@ void AIFPlayerCharacter::AttemptRevive()
 	UIFCombatComponent* const Combat = GetCombatComponent();
 	if (!Health || !Combat)
 	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Revive] AttemptRevive aborted: Health=%s Combat=%s."),
+			Health ? TEXT("valid") : TEXT("null"), Combat ? TEXT("valid") : TEXT("null"));
 		return;
 	}
 
@@ -258,6 +269,8 @@ void AIFPlayerCharacter::AttemptRevive()
 	RestoreAliveState();
 
 	bIsGettingUp = true;
+	UE_LOG(LogIronField, Log, TEXT("[IF-Revive] %s revived: HP=%.0f Invincible=true GettingUp=true."),
+		*GetName(), Health->GetMaxHealth() * Health->GetHealthPercent());
 
 	// The AnimBP calls NotifyGetUpFinished; this timer prevents a permanent lockout if that call is missing.
 	if (UWorld* const World = GetWorld())
@@ -272,6 +285,9 @@ void AIFPlayerCharacter::NotifyGetUpFinished()
 	{
 		World->GetTimerManager().ClearTimer(GetUpFallbackTimerHandle);
 	}
+
+	UE_LOG(LogIronField, Log, TEXT("[IF-Revive] %s NotifyGetUpFinished: GettingUp=%s."),
+		*GetName(), bIsGettingUp ? TEXT("true") : TEXT("false"));
 
 	if (bIsGettingUp)
 	{
@@ -288,11 +304,7 @@ void AIFPlayerCharacter::CompleteRevive()
 		Health->SetInvincible(false);
 	}
 
-	OnReviveFinished();
-}
-
-void AIFPlayerCharacter::OnReviveFinished()
-{
+	UE_LOG(LogIronField, Log, TEXT("[IF-Revive] %s CompleteRevive: Invincible=false GettingUp=false."), *GetName());
 	bUseControllerRotationYaw = true;
 	UpdateTickEnabled();
 	UpdateMovementSpeed();
@@ -451,6 +463,18 @@ void AIFPlayerCharacter::StopSpinAttack()
 	{
 		Combat->StopSpinAttack();
 	}
+}
+
+void AIFPlayerCharacter::RequestPauseToggle()
+{
+	// No dead/get-up gate: pause must work in every pawn state.
+	AIFPlayerController* const PlayerController = Cast<AIFPlayerController>(GetController());
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	PlayerController->TogglePauseGame();
 }
 
 void AIFPlayerCharacter::HandleCombatStateChanged(ECombatState, ECombatState)

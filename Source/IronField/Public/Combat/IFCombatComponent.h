@@ -12,6 +12,8 @@ class UIFHealthComponent;
 class UIFStaminaComponent;
 class USkeletalMeshComponent;
 class UPrimitiveComponent;
+class USoundBase;
+class UNiagaraSystem;
 
 UCLASS()
 class IRONFIELD_API UIFCombatComponent : public UActorComponent
@@ -129,6 +131,13 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Animation", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAnimMontage> HitReactionMontage;
 
+	// Empty until assigned in Blueprint; guarded at play time.
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Feedback", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USoundBase> HitSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Combat|Feedback", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UNiagaraSystem> HitVFX;
+
 private:
 	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Combat|State", meta = (AllowPrivateAccess = "true"))
 	ECombatState CombatState = ECombatState::Idle;
@@ -150,6 +159,7 @@ private:
 	UIFHealthComponent* GetValidActiveAttackTargetHealth(AActor* TargetActor) const;
 	void ResolveWeaponCollisionBox();
 	void SetWeaponCollisionEnabled(bool bEnabled) const;
+	void PlayHitFeedback(const AActor* TargetActor) const;
 
 protected:
 	/** Single-hit gate per attack window. Virtual so spin can allow timed re-hits. */

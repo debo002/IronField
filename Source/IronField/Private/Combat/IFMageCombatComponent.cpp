@@ -1,16 +1,14 @@
 #include "Combat/IFMageCombatComponent.h"
 
+#include "AIController.h"
+#include "AI/IFBTUtils.h"
 #include "Animation/AnimInstance.h"
+#include "BehaviorTree/BlackboardComponent.h"
 #include "Combat/IFProjectile.h"
+#include "Combat/IFCombatTargetingUtils.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/IFAnimMontageUtils.h"
-
-void UIFMageCombatComponent::PlayHitReactionMontage()
-{
-	// Mages are interruptible like melee: casting through focus fire felt unfair
-	// with no player counter at range.
-	Super::PlayHitReactionMontage();
-}
+#include "GameFramework/Pawn.h"
 
 void UIFMageCombatComponent::StartAttack()
 {
@@ -50,34 +48,82 @@ void UIFMageCombatComponent::LaunchProjectileAttack()
 		return;
 	}
 
-	AActor* const Target = GetAttackTarget();
 	AActor* const Owner = GetOwner();
 	UWorld* const World = GetWorld();
-	if (!Target || !Owner || !World)
+	if (!Owner || !World)
 	{
 		return;
 	}
 
-	// Spawn clear of the shooter's collision. A shot materialized inside the owner
-	// reports its initial overlap during SpawnActor, before InitializeProjectile runs.
+	AActor* const Target = ResolveLiveTarget();
+	if (!Target)
+	{
+		return;
+	}
+
+	// One aim vector drives facing, spawn offset, rotation, and velocity.
+	FVector AimDir = Target->GetActorLocation() - Owner->GetActorLocation();
+	if (AimDir.SizeSquared() < KINDA_SMALL_NUMBER)
+	{
+		AimDir = Owner->GetActorForwardVector().GetSafeNormal2D();
+	}
+	else
+	{
+		AimDir.Normalize();
+	}
+	if (AimDir.IsNearlyZero())
+	{
+		return;
+	}
+
+	Owner->SetActorRotation(FRotator(0.f, AimDir.Rotation().Yaw, 0.f));
+
+	// Authored offset is the floor; body radius plus shell radius wins.
 	float ClearanceRadius = ProjectileSpawnForwardOffset;
 	if (const UCapsuleComponent* const OwnerCapsule = Owner->FindComponentByClass<UCapsuleComponent>())
 	{
 		const AIFProjectile* const ProjectileCDO = ProjectileClass->GetDefaultObject<AIFProjectile>();
 		const float ProjectileRadius = ProjectileCDO ? ProjectileCDO->GetCollisionSphereRadius() : 0.f;
-		ClearanceRadius = OwnerCapsule->GetScaledCapsuleRadius() + ProjectileRadius + 20.f;
+		ClearanceRadius = FMath::Max(ClearanceRadius, OwnerCapsule->GetScaledCapsuleRadius() + ProjectileRadius + 20.f);
 	}
 
-	const FVector Forward2D = Owner->GetActorForwardVector().GetSafeNormal2D();
-	const FVector SpawnLocation = Owner->GetActorLocation() + Forward2D * ClearanceRadius;
-	const FRotator SpawnRotation = (Target->GetActorLocation() - SpawnLocation).Rotation();
+	FIFProjectileSpawnArgs Args;
+	Args.SpawnLocation = Owner->GetActorLocation() + AimDir * ClearanceRadius;
+	Args.LaunchDirection = AimDir;
+	Args.Instigator = Owner;
+	Args.Damage = GetCurrentAttackDamage();
+	Args.DamageTypeClass = GetCurrentDamageTypeClass();
 
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	AIFProjectile* const Projectile = World->SpawnActor<AIFProjectile>(ProjectileClass, SpawnLocation, SpawnRotation, SpawnParams);
-	if (Projectile)
+	// Deferred so InitializeProjectile runs before overlap and BeginPlay.
+	const FTransform SpawnTransform(Args.LaunchDirection.Rotation(), Args.SpawnLocation);
+	AIFProjectile* const Projectile = World->SpawnActorDeferred<AIFProjectile>(ProjectileClass, SpawnTransform, Owner, nullptr, ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn);
+	if (!Projectile)
 	{
-		Projectile->InitializeProjectile(Owner, GetCurrentAttackDamage(), GetCurrentDamageTypeClass());
+		return;
 	}
+
+	Projectile->InitializeProjectile(Args);
+	Projectile->FinishSpawning(SpawnTransform);
+}
+
+AActor* UIFMageCombatComponent::ResolveLiveTarget() const
+{
+	AActor* const Owner = GetOwner();
+	const APawn* const OwnerPawn = Cast<APawn>(Owner);
+	const AAIController* const AIController = OwnerPawn ? Cast<AAIController>(OwnerPawn->GetController()) : nullptr;
+	const UBlackboardComponent* const Blackboard = AIController ? AIController->GetBlackboardComponent() : nullptr;
+
+	AActor* const LiveTarget = Blackboard ? Cast<AActor>(Blackboard->GetValueAsObject(IFAI::TargetActorKey)) : nullptr;
+	if (IFCombatTargetingUtils::GetValidAttackTargetHealth(Owner, LiveTarget))
+	{
+		return LiveTarget;
+	}
+
+	AActor* const CachedTarget = GetAttackTarget();
+	if (IFCombatTargetingUtils::GetValidAttackTargetHealth(Owner, CachedTarget))
+	{
+		return CachedTarget;
+	}
+
+	return nullptr;
 }

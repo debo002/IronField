@@ -9,6 +9,7 @@
 class UBehaviorTree;
 class UIFCombatComponent;
 class UIFEnemyAIData;
+class UIFHealthComponent;
 class AIFWaveManager;
 
 UCLASS()
@@ -46,6 +47,10 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UIFCombatComponent> CachedCombatComponent;
+
+	// Cached so unbind survives pawn detach (GetPawn() is null in OnUnPossess after death).
+	UPROPERTY(Transient)
+	TObjectPtr<UIFHealthComponent> CachedHealthComponent;
 
 	UPROPERTY(Transient)
 	TObjectPtr<AIFWaveManager> CachedWaveManager;

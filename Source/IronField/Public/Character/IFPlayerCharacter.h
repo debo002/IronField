@@ -75,6 +75,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Input")
 	TObjectPtr<UInputAction> SpinAttackInputAction;
 
+	// Game-level toggle bound beside the other actions; key choice lives in IA_Pause.
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Input")
+	TObjectPtr<UInputAction> PauseInputAction;
+
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Player|Movement")
 	float WalkSpeed = 375.f;
 
@@ -121,7 +125,6 @@ protected:
 	float GetUpDuration = 1.5f;
 
 	virtual void OnDeathStarted() override;
-	void OnReviveFinished();
 
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Player|Components", meta = (AllowPrivateAccess = "true"))
@@ -152,6 +155,7 @@ private:
 	void StopBlock();
 	void StartSpinAttack();
 	void StopSpinAttack();
+	void RequestPauseToggle();
 
 	UFUNCTION()
 	void HandleStaminaDepleted();

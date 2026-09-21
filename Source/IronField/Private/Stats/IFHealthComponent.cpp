@@ -1,11 +1,18 @@
 #include "Stats/IFHealthComponent.h"
 
+#include "Core/IFLog.h"
 #include "GameFramework/Actor.h"
 
 void UIFHealthComponent::ApplyDamage(float Amount)
 {
 	if (bIsDead || bIsInvincible || Amount <= 0.f)
 	{
+		// Narrow post-revive diagnosis: invincible blocks are unexpected outside the get-up window.
+		if (bIsInvincible && !bIsDead && Amount > 0.f)
+		{
+			UE_LOG(LogIronField, Log, TEXT("[IF-Revive] %s blocked %.0f damage while invincible."),
+				*GetNameSafe(GetOwner()), Amount);
+		}
 		return;
 	}
 

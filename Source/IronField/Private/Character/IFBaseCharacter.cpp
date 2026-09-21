@@ -4,6 +4,7 @@
 #include "Combat/IFCombatComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Core/IFFeedbackUtils.h"
 #include "Core/IFLog.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Stats/IFHealthComponent.h"
@@ -109,10 +110,16 @@ void AIFBaseCharacter::HandleDeath()
 
 	StopMovementForDeath();
 	DisableCollisionForDeath();
+	PlayDeathFeedback();
 	OnDeathStarted();
 
 	// After this point death is visual only; the AnimBP owns the pose.
 	OnCharacterDied.Broadcast(this);
+}
+
+void AIFBaseCharacter::PlayDeathFeedback() const
+{
+	IFFeedbackUtils::PlayAtLocation(GetWorld(), DeathSound, DeathVFX, GetActorLocation());
 }
 
 void AIFBaseCharacter::StopMovementForDeath()

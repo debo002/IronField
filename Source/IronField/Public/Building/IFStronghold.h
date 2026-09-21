@@ -6,6 +6,8 @@
 
 class UIFHealthComponent;
 class UStaticMeshComponent;
+class USoundBase;
+class UNiagaraSystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnStrongholdDestroyed, AIFStronghold*, Stronghold);
 
@@ -38,9 +40,22 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Stronghold")
 	TObjectPtr<UIFHealthComponent> HealthComponent;
 
+	// Empty until assigned in Blueprint; guarded at play time.
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Feedback")
+	TObjectPtr<USoundBase> HitSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Stronghold|Feedback")
+	TObjectPtr<UNiagaraSystem> HitVFX;
+
 private:
 	UFUNCTION()
 	void HandleDeath();
 
+	UFUNCTION()
+	void HandleHealthChanged(float Percent);
+
 	void HandleDestruction();
+	void PlayHitFeedback();
+
+	float LastHealthPercent = 1.f;
 };

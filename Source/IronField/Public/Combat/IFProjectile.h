@@ -8,6 +8,30 @@
 class UDamageType;
 class UProjectileMovementComponent;
 class USphereComponent;
+class USoundBase;
+class UNiagaraSystem;
+
+/** Single source of truth for a shot: spawn pose and flight come from one direction. */
+USTRUCT()
+struct FIFProjectileSpawnArgs
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector SpawnLocation = FVector::ZeroVector;
+
+	UPROPERTY()
+	FVector LaunchDirection = FVector::ForwardVector;
+
+	UPROPERTY()
+	TObjectPtr<AActor> Instigator = nullptr;
+
+	UPROPERTY()
+	float Damage = 0.f;
+
+	UPROPERTY()
+	TSubclassOf<UDamageType> DamageTypeClass = nullptr;
+};
 
 UCLASS()
 class IRONFIELD_API AIFProjectile : public AActor
@@ -17,7 +41,7 @@ class IRONFIELD_API AIFProjectile : public AActor
 public:
 	AIFProjectile();
 
-	void InitializeProjectile(AActor* InInstigator, float InDamage, TSubclassOf<UDamageType> InDamageTypeClass);
+	void InitializeProjectile(const FIFProjectileSpawnArgs& Args);
 
 	/** Unscaled collision radius, used to spawn clear of the shooter's collision. */
 	float GetCollisionSphereRadius() const { return CollisionSphere ? CollisionSphere->GetUnscaledSphereRadius() : 0.f; }
@@ -42,13 +66,19 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Lifetime", meta = (ClampMin = "0.1"))
 	float LifeSpanSeconds = 4.f;
 
+	// Empty until assigned in Blueprint; guarded at play time.
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Feedback")
+	TObjectPtr<USoundBase> HitSound;
+
+	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Feedback")
+	TObjectPtr<UNiagaraSystem> HitVFX;
+
 private:
 	UPROPERTY(Transient)
 	TObjectPtr<AActor> ProjectileInstigator;
 
 	float Damage = 0.f;
 	TSubclassOf<UDamageType> DamageTypeClass;
-	bool bInitialized = false;
 	bool bHasHit = false;
 
 	UFUNCTION()
@@ -58,4 +88,5 @@ private:
 	void HandleSphereHit(UPrimitiveComponent* HitComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
 
 	void HandleImpact(AActor* OtherActor);
+	void PlayHitFeedback() const;
 };

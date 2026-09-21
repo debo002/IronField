@@ -4,6 +4,7 @@
 #include "Components/TextBlock.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
+#include "Core/IFPlayerControllerUtils.h"
 #include "Core/IFWaveManagerSubsystem.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -86,14 +87,7 @@ void UIFGameOverScreenWidget::ApplyStatsLine()
 
 void UIFGameOverScreenWidget::UnpauseAndOpenLevel(FName LevelName)
 {
-	UWorld* const World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	UGameplayStatics::SetGamePaused(World, false);
-	UGameplayStatics::OpenLevel(this, LevelName);
+	IFPlayerControllerUtils::OpenLevelUnpaused(this, LevelName);
 }
 
 void UIFGameOverScreenWidget::HandleRestartClicked()

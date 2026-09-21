@@ -11,6 +11,7 @@
 #include "Core/IFPlayerSubsystem.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Core/IFWaveManagerSubsystem.h"
+#include "Core/IFFeedbackUtils.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
 #include "Stats/IFHealthComponent.h"
@@ -63,6 +64,11 @@ void AIFWaveManager::StartNextWave()
 
 	if (CurrentWaveIndex >= Waves.Num())
 	{
+		if (UWorld* const World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(SpawnTimerHandle);
+			World->GetTimerManager().ClearTimer(ValidateTimerHandle);
+		}
 		UE_LOG(LogIronField, Log, TEXT("[IF-Wave] All waves completed."));
 		OnAllWavesCompleted.Broadcast();
 		return;
@@ -79,7 +85,11 @@ void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
 	{
 		World->GetTimerManager().ClearTimer(InterWaveTimerHandle);
 		World->GetTimerManager().ClearTimer(SpawnTimerHandle);
+		World->GetTimerManager().ClearTimer(ValidateTimerHandle);
 	}
+
+	// Invalidate any timer callbacks scheduled under the previous wave.
+	WaveGeneration++;
 
 	EnemiesSpawnedSoFar = 0;
 	EnemiesAlive = 0;
@@ -91,21 +101,120 @@ void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
 	const int32 WaveNumber = GetCurrentWave();
 	UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Starting wave %d."), WaveNumber);
 	OnWaveStarted.Broadcast(WaveNumber);
+	PlayWaveStartFeedback();
+
+	// Failsafe: reconcile the alive-count against live enemies while the wave runs,
+	// so removals that bypass OnCharacterDied cannot stall the wave forever.
+	if (UWorld* const World = GetWorld())
+	{
+		if (WaveValidationIntervalSeconds > 0.f)
+		{
+			FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::HandleValidateTimer, WaveGeneration);
+			World->GetTimerManager().SetTimer(ValidateTimerHandle, Delegate, WaveValidationIntervalSeconds, true, WaveValidationIntervalSeconds);
+		}
+	}
 
 	SpawnAllEnemiesInWave(Wave);
 	CompleteWaveIfFinished();
 }
 
+void AIFWaveManager::PlayWaveStartFeedback() const
+{
+	IFFeedbackUtils::PlayAtLocation(GetWorld(), WaveStartSound, WaveStartVFX, GetActorLocation());
+}
+
 void AIFWaveManager::ScheduleNextWave()
 {
 	UWorld* const World = GetWorld();
-	if (!World || InterWaveDelaySeconds <= 0.f)
+	if (!World)
 	{
 		StartNextWave();
 		return;
 	}
 
-	World->GetTimerManager().SetTimer(InterWaveTimerHandle, this, &AIFWaveManager::StartNextWave, InterWaveDelaySeconds, false);
+	if (InterWaveDelaySeconds <= 0.f)
+	{
+		// Never recurse same-frame: a chain of empty waves would deepen the stack
+		// once per wave. A single-tick defer keeps the rhythm tight without recursion.
+		FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::HandleInterWaveTimer, WaveGeneration);
+		World->GetTimerManager().SetTimer(InterWaveTimerHandle, Delegate, 0.01f, false);
+		return;
+	}
+
+	FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::HandleInterWaveTimer, WaveGeneration);
+	World->GetTimerManager().SetTimer(InterWaveTimerHandle, Delegate, InterWaveDelaySeconds, false);
+}
+
+void AIFWaveManager::HandleInterWaveTimer(uint32 ScheduledGeneration)
+{
+	if (ScheduledGeneration != WaveGeneration)
+	{
+		return;
+	}
+	StartNextWave();
+}
+
+void AIFWaveManager::HandleSpawnTimerTick(uint32 ScheduledGeneration)
+{
+	if (ScheduledGeneration != WaveGeneration)
+	{
+		if (UWorld* const World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(SpawnTimerHandle);
+		}
+		return;
+	}
+	TrySpawnPending();
+}
+
+void AIFWaveManager::HandleValidateTimer(uint32 ScheduledGeneration)
+{
+	if (ScheduledGeneration != WaveGeneration)
+	{
+		if (UWorld* const World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(ValidateTimerHandle);
+		}
+		return;
+	}
+
+	if (!bIsWaveActive)
+	{
+		return;
+	}
+
+	ValidateWaveState();
+}
+
+void AIFWaveManager::ValidateWaveState()
+{
+	int32 ActualAlive = 0;
+	for (int32 Index = SpawnedEnemies.Num() - 1; Index >= 0; --Index)
+	{
+		AIFBaseCharacter* const Enemy = SpawnedEnemies[Index];
+		if (!IsValid(Enemy))
+		{
+			SpawnedEnemies.RemoveAt(Index);
+			continue;
+		}
+
+		if (!Enemy->IsDead())
+		{
+			ActualAlive++;
+		}
+	}
+
+	if (ActualAlive != EnemiesAlive)
+	{
+		UE_LOG(LogIronField, Warning, TEXT("[IF-Wave] Wave %d alive-count mismatch: tracked=%d actual=%d; reconciling."),
+			GetCurrentWave(), EnemiesAlive, ActualAlive);
+		EnemiesAlive = ActualAlive;
+		OnEnemiesAliveCountChanged.Broadcast(EnemiesAlive);
+	}
+
+	// Refill the trickle queue and unstall completion if the mismatch held either back.
+	TrySpawnPending();
+	CompleteWaveIfFinished();
 }
 
 void AIFWaveManager::ApplyWaveScaling(AIFBaseCharacter* Enemy) const
@@ -207,7 +316,8 @@ void AIFWaveManager::SpawnAllEnemiesInWave(const FWaveDefinition& Wave)
 	if (World && PendingSpawns.Num() > 0 && SpawnIntervalSeconds > 0.f)
 	{
 		// First spawn waits out the wave banner so a wave never instant-contacts.
-		World->GetTimerManager().SetTimer(SpawnTimerHandle, this, &AIFWaveManager::TrySpawnPending, SpawnIntervalSeconds, true, SpawnStartDelaySeconds);
+		FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::HandleSpawnTimerTick, WaveGeneration);
+		World->GetTimerManager().SetTimer(SpawnTimerHandle, Delegate, SpawnIntervalSeconds, true, SpawnStartDelaySeconds);
 	}
 	else
 	{
@@ -321,6 +431,11 @@ void AIFWaveManager::CompleteWaveIfFinished()
 	UE_LOG(LogIronField, Log, TEXT("[IF-Wave] Wave %d complete."), WaveNumber);
 	OnWaveCompleted.Broadcast(WaveNumber);
 
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ValidateTimerHandle);
+	}
+
 	CleanupWaveCorpses();
 	ScheduleNextWave();
 }
@@ -373,6 +488,7 @@ void AIFWaveManager::UnbindAllSpawnedEnemyDelegates()
 			Enemy->OnCharacterDied.RemoveDynamic(this, &AIFWaveManager::HandleEnemyDied);
 		}
 	}
+	SpawnedEnemies.Empty();
 }
 
 void AIFWaveManager::BeginPlay()
@@ -407,7 +523,8 @@ void AIFWaveManager::BeginPlay()
 	if (bAutoStartOnBeginPlay)
 	{
 		// Opening grace: the run breathes before wave 1 instead of spawning on frame one.
-		World->GetTimerManager().SetTimer(InterWaveTimerHandle, this, &AIFWaveManager::StartNextWave, InitialWaveStartDelaySeconds, false);
+		FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::HandleInterWaveTimer, WaveGeneration);
+		World->GetTimerManager().SetTimer(InterWaveTimerHandle, Delegate, InitialWaveStartDelaySeconds, false);
 	}
 }
 
@@ -427,7 +544,11 @@ void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 		World->GetTimerManager().ClearTimer(InterWaveTimerHandle);
 		World->GetTimerManager().ClearTimer(SpawnTimerHandle);
+		World->GetTimerManager().ClearTimer(ValidateTimerHandle);
 	}
+
+	// Invalidate timer callbacks already in flight during teardown.
+	WaveGeneration++;
 
 	UnbindPlayer();
 	UnbindAllSpawnedEnemyDelegates();

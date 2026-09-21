@@ -148,6 +148,12 @@ void UBTService_IFFindTarget::ChooseTarget(UBehaviorTreeComponent& OwnerComp) co
 		}
 	}
 
+	// Both candidates invalid: clear a dead locked target instead of keeping it.
+	if (!Champion && !IsUsableTarget(Current))
+	{
+		Desired = nullptr;
+	}
+
 	if (Desired != Current)
 	{
 		BB->SetValueAsObject(TargetActorKey.SelectedKeyName, Desired);

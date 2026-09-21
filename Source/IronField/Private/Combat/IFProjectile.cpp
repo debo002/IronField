@@ -1,7 +1,7 @@
 #include "Combat/IFProjectile.h"
 
 #include "Combat/IFCombatTargetingUtils.h"
-#include "Core/IFLog.h"
+#include "Core/IFFeedbackUtils.h"
 #include "Components/SphereComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/ProjectileMovementComponent.h"
@@ -16,6 +16,9 @@ AIFProjectile::AIFProjectile()
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovement"));
 	ProjectileMovement->UpdatedComponent = CollisionSphere;
 	ProjectileMovement->bRotationFollowsVelocity = true;
+
+	// InitializeProjectile sets Velocity in world space; never reinterpret it as local.
+	ProjectileMovement->bInitialVelocityInLocalSpace = false;
 
 	CollisionSphere->OnComponentBeginOverlap.AddDynamic(this, &AIFProjectile::HandleSphereBeginOverlap);
 	CollisionSphere->OnComponentHit.AddDynamic(this, &AIFProjectile::HandleSphereHit);
@@ -37,26 +40,31 @@ void AIFProjectile::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void AIFProjectile::InitializeProjectile(AActor* InInstigator, float InDamage, TSubclassOf<UDamageType> InDamageTypeClass)
+void AIFProjectile::InitializeProjectile(const FIFProjectileSpawnArgs& Args)
 {
-	ProjectileInstigator = InInstigator;
-	Damage = InDamage;
-	DamageTypeClass = InDamageTypeClass;
-	bInitialized = true;
+	ProjectileInstigator = Args.Instigator;
+	Damage = Args.Damage;
+	DamageTypeClass = Args.DamageTypeClass;
 
-	if (InInstigator && CollisionSphere)
+	if (ProjectileInstigator && CollisionSphere)
 	{
-		CollisionSphere->IgnoreActorWhenMoving(InInstigator, true);
+		CollisionSphere->IgnoreActorWhenMoving(ProjectileInstigator, true);
 	}
 
-	// Movement values are applied here, not just in the constructor: Blueprint overrides
-	// of the EditDefaultsOnly properties only exist after the constructor has run.
+	// Rotation and velocity share Args.LaunchDirection; nothing re-derives it.
+	if (!Args.LaunchDirection.IsNearlyZero())
+	{
+		SetActorRotation(Args.LaunchDirection.Rotation());
+	}
+
+	// Speed knobs are the EditDefaultsOnly properties; tune ProjectileSpeed,
+	// not the movement component, which this overwrites.
 	if (ProjectileMovement)
 	{
 		ProjectileMovement->InitialSpeed = ProjectileSpeed;
 		ProjectileMovement->MaxSpeed = ProjectileSpeed;
 		ProjectileMovement->ProjectileGravityScale = ProjectileGravityScale;
-		ProjectileMovement->Velocity = GetActorForwardVector() * ProjectileSpeed;
+		ProjectileMovement->Velocity = Args.LaunchDirection * ProjectileSpeed;
 	}
 }
 
@@ -74,15 +82,6 @@ void AIFProjectile::HandleImpact(AActor* OtherActor)
 {
 	if (bHasHit || !OtherActor || OtherActor == this || OtherActor == ProjectileInstigator)
 	{
-		return;
-	}
-
-	if (!bInitialized)
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-Combat] %s impacted %s without InitializeProjectile; destroying."),
-			*GetNameSafe(this), *GetNameSafe(OtherActor));
-		bHasHit = true;
-		Destroy();
 		return;
 	}
 
@@ -105,5 +104,11 @@ void AIFProjectile::HandleImpact(AActor* OtherActor)
 
 	bHasHit = true;
 	IFCombatTargetingUtils::DeliverDamage(OtherActor, ProjectileInstigator, Damage, DamageTypeClass);
+	PlayHitFeedback();
 	Destroy();
+}
+
+void AIFProjectile::PlayHitFeedback() const
+{
+	IFFeedbackUtils::PlayAtLocation(GetWorld(), HitSound, HitVFX, GetActorLocation());
 }

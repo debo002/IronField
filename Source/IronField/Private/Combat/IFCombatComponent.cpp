@@ -5,9 +5,9 @@
 #include "Character/IFEnemyCharacter.h"
 #include "Combat/IFCombatTargetingUtils.h"
 #include "Components/BoxComponent.h"
-#include "Components/BoxComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/IFAnimMontageUtils.h"
+#include "Core/IFFeedbackUtils.h"
 #include "Core/IFLog.h"
 #include "GameFramework/Character.h"
 #include "Stats/IFStaminaComponent.h"
@@ -384,6 +384,17 @@ void UIFCombatComponent::ResolveAttackHit(AActor* TargetActor)
 	}
 
 	IFCombatTargetingUtils::DeliverDamage(TargetActor, GetOwner(), ActiveAttackDamage, ActiveDamageTypeClass);
+	PlayHitFeedback(TargetActor);
+}
+
+void UIFCombatComponent::PlayHitFeedback(const AActor* TargetActor) const
+{
+	if (!TargetActor)
+	{
+		return;
+	}
+
+	IFFeedbackUtils::PlayAtLocation(GetWorld(), HitSound, HitVFX, TargetActor->GetActorLocation());
 }
 
 bool UIFCombatComponent::TryRegisterAttackHit(AActor* TargetActor)

@@ -6,14 +6,6 @@
 #include "Character/IFEnemyCharacter.h"
 #include "Navigation/PathFollowingComponent.h"
 
-namespace
-{
-	struct FIFMoveToMemory
-	{
-		float TimeSinceRepath = 0.f;
-	};
-}
-
 UBTTask_IFMoveToTarget::UBTTask_IFMoveToTarget()
 {
 	NodeName = TEXT("Move To Target");
@@ -23,12 +15,12 @@ UBTTask_IFMoveToTarget::UBTTask_IFMoveToTarget()
 
 uint16 UBTTask_IFMoveToTarget::GetInstanceMemorySize() const
 {
-	return sizeof(FIFMoveToMemory);
+	return sizeof(float);
 }
 
 EBTNodeResult::Type UBTTask_IFMoveToTarget::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
-	new (NodeMemory) FIFMoveToMemory();
+	new (NodeMemory) float(0.f);
 
 	AAIController* const AIController = OwnerComp.GetAIOwner();
 	AIFEnemyCharacter* const Enemy = GetControlledEnemy(OwnerComp);
@@ -62,11 +54,11 @@ void UBTTask_IFMoveToTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 {
 	Super::TickTask(OwnerComp, NodeMemory, DeltaSeconds);
 
-	FIFMoveToMemory* const Memory = reinterpret_cast<FIFMoveToMemory*>(NodeMemory);
+	float* const TimeSinceRepath = reinterpret_cast<float*>(NodeMemory);
 	AAIController* const AIController = OwnerComp.GetAIOwner();
 	AIFEnemyCharacter* const Enemy = GetControlledEnemy(OwnerComp);
 	AActor* const Target = GetBlackboardTargetActor(OwnerComp, TargetActorKey);
-	if (!Memory || !AIController || !Enemy || !Target)
+	if (!TimeSinceRepath || !AIController || !Enemy || !Target)
 	{
 		FinishLatentTask(OwnerComp, EBTNodeResult::Failed);
 		return;
@@ -80,10 +72,10 @@ void UBTTask_IFMoveToTarget::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* 
 		return;
 	}
 
-	Memory->TimeSinceRepath += DeltaSeconds;
-	if (Memory->TimeSinceRepath >= RepathInterval)
+	*TimeSinceRepath += DeltaSeconds;
+	if (*TimeSinceRepath >= RepathInterval)
 	{
-		Memory->TimeSinceRepath = 0.f;
+		*TimeSinceRepath = 0.f;
 		AIController->MoveToActor(Target, Range, false);
 	}
 }
