@@ -14,6 +14,7 @@
 #include "Core/IFFeedbackUtils.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
+#include "Pickup/IFHealPickup.h"
 #include "Stats/IFHealthComponent.h"
 #include "TimerManager.h"
 #include "Wave/IFEnemySpawnPoint.h"
@@ -120,7 +121,7 @@ void AIFWaveManager::BeginWaveFromDefinition(const FWaveDefinition& Wave)
 
 void AIFWaveManager::PlayWaveStartFeedback() const
 {
-	IFFeedbackUtils::PlayAtLocation(GetWorld(), WaveStartSound, WaveStartVFX, GetActorLocation());
+	IFFeedbackUtils::PlayAtLocation(GetWorld(), WaveStartSound, nullptr, GetActorLocation());
 }
 
 void AIFWaveManager::ScheduleNextWave()
@@ -219,27 +220,7 @@ void AIFWaveManager::ValidateWaveState()
 
 void AIFWaveManager::ApplyWaveScaling(AIFBaseCharacter* Enemy) const
 {
-	if (!Enemy || !IsUnlimitedRunMode() || CurrentWaveIndex <= 0)
-	{
-		return;
-	}
-
-	const float HPScale = 1.f + UnlimitedHPScalePerWave * static_cast<float>(CurrentWaveIndex);
-	const float DamageScale = 1.f + UnlimitedDamageScalePerWave * static_cast<float>(CurrentWaveIndex);
-
-	if (UIFHealthComponent* const Health = Enemy->GetHealthComponent())
-	{
-		Health->SetMaxHealth(Health->GetMaxHealth() * HPScale);
-	}
-
-	if (UIFMeleeCombatComponent* const Melee = Enemy->FindComponentByClass<UIFMeleeCombatComponent>())
-	{
-		Melee->ApplyDamageScale(DamageScale);
-	}
-	else if (UIFMageCombatComponent* const Mage = Enemy->FindComponentByClass<UIFMageCombatComponent>())
-	{
-		Mage->ApplyDamageScale(DamageScale);
-	}
+	// No stat scaling in Unlimited mode — only enemy count increases via BuildUnlimitedWave
 }
 
 FVector AIFWaveManager::PickSpawnLocation(FRotator& OutRotation) const
@@ -458,6 +439,9 @@ void AIFWaveManager::HandleEnemyDied(AIFBaseCharacter* DeadEnemy)
 	// Refill concurrency from the queue as the player scores kills.
 	TrySpawnPending();
 	CompleteWaveIfFinished();
+
+	// Spawn heal pickup on death
+	TrySpawnHealPickup(DeadEnemy);
 }
 
 void AIFWaveManager::CleanupWaveCorpses()
@@ -520,6 +504,9 @@ void AIFWaveManager::BeginPlay()
 
 	CacheSpawnPoints();
 
+	OnWaveCompleted.AddDynamic(this, &AIFWaveManager::HandleWaveClearHeal);
+	bWaveCompletedBound = true;
+
 	if (bAutoStartOnBeginPlay)
 	{
 		// Opening grace: the run breathes before wave 1 instead of spawning on frame one.
@@ -549,6 +536,12 @@ void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 	// Invalidate timer callbacks already in flight during teardown.
 	WaveGeneration++;
+
+	if (bWaveCompletedBound)
+	{
+		OnWaveCompleted.RemoveDynamic(this, &AIFWaveManager::HandleWaveClearHeal);
+		bWaveCompletedBound = false;
+	}
 
 	UnbindPlayer();
 	UnbindAllSpawnedEnemyDelegates();
@@ -605,4 +598,112 @@ void AIFWaveManager::UnbindPlayer()
 void AIFWaveManager::HandlePlayerHealthDepleted()
 {
 	OnPlayerDowned.Broadcast();
+}
+
+void AIFWaveManager::HandleWaveClearHeal(int32 WaveNumber)
+{
+	UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Wave %d clear - applying heal/repair."), WaveNumber);
+
+	float PlayerHealed = 0.f;
+	float GateRepaired = 0.f;
+
+	if (UWorld* const World = GetWorld())
+	{
+		// Heal player
+		if (UIFPlayerSubsystem* const PlayerSubsystem = World->GetSubsystem<UIFPlayerSubsystem>())
+		{
+			if (AIFPlayerCharacter* const Player = PlayerSubsystem->GetPlayer())
+			{
+				if (UIFHealthComponent* const Health = Player->GetHealthComponent())
+				{
+					if (!Health->IsDead())
+					{
+						const float HealAmount = Health->GetMaxHealth() * PlayerHealPercent;
+						Health->ApplyHealing(HealAmount);
+						PlayerHealed = HealAmount;
+						UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Player healed %.0f (%.0f%% of %.0f max)."), HealAmount, PlayerHealPercent * 100.f, Health->GetMaxHealth());
+
+					if (HealSound)
+					{
+						IFFeedbackUtils::PlayAtLocation(World, HealSound, nullptr, Player->GetActorLocation());
+					}
+					}
+					else
+					{
+						UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Player dead - skipping heal."));
+					}
+				}
+			}
+		}
+
+		// Repair stronghold
+		if (AActor* const StrongholdActor = GetStrongholdActor())
+		{
+			if (UIFHealthComponent* const Health = StrongholdActor->FindComponentByClass<UIFHealthComponent>())
+			{
+				if (!Health->IsDead())
+				{
+					const float RepairAmount = Health->GetMaxHealth() * StrongholdRepairPercent;
+					Health->ApplyHealing(RepairAmount);
+					GateRepaired = RepairAmount;
+					UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Stronghold repaired %.0f (%.0f%% of %.0f max)."), RepairAmount, StrongholdRepairPercent * 100.f, Health->GetMaxHealth());
+
+					if (HealSound)
+					{
+						IFFeedbackUtils::PlayAtLocation(World, HealSound, nullptr, StrongholdActor->GetActorLocation());
+					}
+				}
+				else
+				{
+					UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Stronghold destroyed - skipping repair."));
+				}
+			}
+		}
+	}
+
+	OnWaveClearHeal.Broadcast(WaveNumber, PlayerHealed, GateRepaired);
+}
+
+void AIFWaveManager::TrySpawnHealPickup(AIFBaseCharacter* DeadEnemy)
+{
+	if (!DeadEnemy || !HealPickupClass || DropChance <= 0.f)
+	{
+		return;
+	}
+
+	if (FMath::FRand() > DropChance)
+	{
+		return;
+	}
+
+	UWorld* const World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	FVector SpawnLocation = DeadEnemy->GetActorLocation();
+	// Trace down to find ground so pickup sits on floor, not floating at capsule base + 50
+	FHitResult HitResult;
+	FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(PickupSpawnTrace), false, DeadEnemy);
+	TraceParams.bReturnPhysicalMaterial = false;
+	TraceParams.bTraceComplex = true;
+	if (World->LineTraceSingleByChannel(HitResult, SpawnLocation, SpawnLocation - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, TraceParams))
+	{
+		SpawnLocation = HitResult.Location;
+	}
+	else
+	{
+		SpawnLocation.Z += 10.f; // slight offset above ground if no trace hit
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	AIFHealPickup* const Pickup = World->SpawnActor<AIFHealPickup>(HealPickupClass, SpawnLocation, FRotator::ZeroRotator, SpawnParams);
+	if (Pickup)
+	{
+		Pickup->HealAmount = PickupHealAmount;
+		UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Spawned heal pickup at %s (amount=%.0f)."), *SpawnLocation.ToString(), PickupHealAmount);
+	}
 }

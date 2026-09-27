@@ -75,6 +75,12 @@ private:
 	void HandleKillCountChanged(int32 NewCount);
 
 	UFUNCTION()
+	void HandleWaveCompleted(int32 WaveNumber);
+
+	UFUNCTION()
+	void HandleWaveClearHeal(int32 WaveNumber, float PlayerHealed, float GateRepaired);
+
+	UFUNCTION()
 	void HandleWaveManagerRegistered(AIFWaveManager* WaveManager);
 
 	UFUNCTION()

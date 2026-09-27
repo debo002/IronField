@@ -225,6 +225,8 @@ void UIFHUD::BindWaveManager(AIFWaveManager* WaveManager)
 	WaveManager->OnWaveStarted.AddDynamic(this, &UIFHUD::HandleWaveStarted);
 	WaveManager->OnEnemiesAliveCountChanged.AddDynamic(this, &UIFHUD::HandleEnemiesAliveChanged);
 	WaveManager->OnKillCountChanged.AddDynamic(this, &UIFHUD::HandleKillCountChanged);
+	WaveManager->OnWaveCompleted.AddDynamic(this, &UIFHUD::HandleWaveCompleted);
+	WaveManager->OnWaveClearHeal.AddDynamic(this, &UIFHUD::HandleWaveClearHeal);
 	BoundWaveManager = WaveManager;
 	bWaveBound = true;
 
@@ -254,6 +256,8 @@ void UIFHUD::UnbindWaveManager()
 		WaveManager->OnWaveStarted.RemoveDynamic(this, &UIFHUD::HandleWaveStarted);
 		WaveManager->OnEnemiesAliveCountChanged.RemoveDynamic(this, &UIFHUD::HandleEnemiesAliveChanged);
 		WaveManager->OnKillCountChanged.RemoveDynamic(this, &UIFHUD::HandleKillCountChanged);
+		WaveManager->OnWaveCompleted.RemoveDynamic(this, &UIFHUD::HandleWaveCompleted);
+		WaveManager->OnWaveClearHeal.RemoveDynamic(this, &UIFHUD::HandleWaveClearHeal);
 	}
 	BoundWaveManager = nullptr;
 	bWaveBound = false;
@@ -411,5 +415,28 @@ void UIFHUD::HandleStrongholdHealthChanged(float Percent)
 	if (StrongholdHealthBar)
 	{
 		StrongholdHealthBar->SetTargetPercent(Percent);
+	}
+}
+
+void UIFHUD::HandleWaveCompleted(int32 WaveNumber)
+{
+	// Banner with exact amounts arrives via OnWaveClearHeal below (broadcast by the
+	// manager in the same frame). This handler only keeps the info line in sync.
+	CurrentWaveNumber = WaveNumber;
+	UpdateInfoLine();
+}
+
+void UIFHUD::HandleWaveClearHeal(int32 WaveNumber, float PlayerHealed, float GateRepaired)
+{
+	CurrentWaveNumber = WaveNumber;
+	UpdateInfoLine();
+
+	if (PlayerHealed > 0.f || GateRepaired > 0.f)
+	{
+		ShowBanner(FString::Printf(TEXT("WAVE %d CLEARED  +%.0f HP  /  GATE +%.0f"), WaveNumber, PlayerHealed, GateRepaired));
+	}
+	else
+	{
+		ShowBanner(FString::Printf(TEXT("WAVE %d CLEARED"), WaveNumber));
 	}
 }

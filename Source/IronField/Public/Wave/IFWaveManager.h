@@ -7,12 +7,13 @@
 
 class AIFPlayerCharacter;
 class AIFBaseCharacter;
+class AIFHealPickup;
 class USoundBase;
-class UNiagaraSystem;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnPlayerDowned);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaveStarted, int32, WaveNumber);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWaveCompleted, int32, WaveNumber);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnWaveClearHeal, int32, WaveNumber, float, PlayerHealed, float, GateRepaired);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEnemiesAliveCountChanged, int32, NewCount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnKillCountChanged, int32, NewCount);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnAllWavesCompleted);
@@ -56,6 +57,11 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "IronField|Wave|Events")
 	FOnWaveCompleted OnWaveCompleted;
+
+	// Broadcast after wave-clear healing is applied so HUD can show exact amounts.
+	// Zero amounts mean that side was skipped (dead/missing) — listeners show a plain banner.
+	UPROPERTY(BlueprintAssignable, Category = "IronField|Wave|Events")
+	FOnWaveClearHeal OnWaveClearHeal;
 
 	UPROPERTY(BlueprintAssignable, Category = "IronField|Wave|Events")
 	FOnEnemiesAliveCountChanged OnEnemiesAliveCountChanged;
@@ -109,19 +115,28 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
 	float WaveValidationIntervalSeconds = 2.f;
 
-	/** Unlimited stat pressure per wave index (wave 1 = unscaled). */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
-	float UnlimitedHPScalePerWave = 0.08f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Config", meta = (ClampMin = "0.0"))
-	float UnlimitedDamageScalePerWave = 0.03f;
-
 	// Empty until assigned in Blueprint; guarded at play time.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Feedback")
 	TObjectPtr<USoundBase> WaveStartSound;
 
+	// Wave-clear heal & drops
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Heal", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float PlayerHealPercent = 0.3f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Heal", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float StrongholdRepairPercent = 0.15f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Drops", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float DropChance = 0.12f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Drops", meta = (ClampMin = "1.0"))
+	float PickupHealAmount = 25.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Drops")
+	TSubclassOf<AIFHealPickup> HealPickupClass;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Feedback")
-	TObjectPtr<UNiagaraSystem> WaveStartVFX;
+	TObjectPtr<USoundBase> HealSound;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Wave|State")
 	int32 TotalEnemiesInWave = 0;
@@ -220,6 +235,14 @@ private:
 	UFUNCTION()
 	void HandleEnemyDied(AIFBaseCharacter* DeadEnemy);
 
+	UFUNCTION()
+	void HandleWaveClearHeal(int32 WaveNumber);
+
+	void TrySpawnHealPickup(AIFBaseCharacter* DeadEnemy);
+
 	void BindPlayer(AIFPlayerCharacter* Player);
 	void UnbindPlayer();
+
+	UPROPERTY(Transient)
+	bool bWaveCompletedBound = false;
 };
