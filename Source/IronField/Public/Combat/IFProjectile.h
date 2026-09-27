@@ -10,6 +10,7 @@ class UProjectileMovementComponent;
 class USphereComponent;
 class USoundBase;
 class UNiagaraSystem;
+class UNiagaraComponent;
 
 /** Single source of truth for a shot: spawn pose and flight come from one direction. */
 USTRUCT()
@@ -55,6 +56,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "IronField|Projectile|Components")
 	TObjectPtr<UProjectileMovementComponent> ProjectileMovement;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Projectile|Components", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UNiagaraComponent> VFXComponent;
 
 	/** Fast enough that sprint can't outrun it, slow enough to stay dodgeable. */
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Projectile|Movement", meta = (ClampMin = "0.0"))

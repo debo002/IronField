@@ -5,6 +5,7 @@
 #include "Components/SphereComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/ProjectileMovementComponent.h"
+#include "NiagaraComponent.h"
 
 AIFProjectile::AIFProjectile()
 {
@@ -12,6 +13,13 @@ AIFProjectile::AIFProjectile()
 
 	CollisionSphere = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionSphere"));
 	SetRootComponent(CollisionSphere);
+	CollisionSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CollisionSphere->SetCollisionObjectType(ECC_WorldDynamic);
+	CollisionSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
+	CollisionSphere->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	CollisionSphere->SetCollisionResponseToChannel(ECC_WorldStatic, ECR_Overlap);
+	CollisionSphere->SetCollisionResponseToChannel(ECC_WorldDynamic, ECR_Overlap);
+	CollisionSphere->SetGenerateOverlapEvents(true);
 
 	ProjectileMovement = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("ProjectileMovement"));
 	ProjectileMovement->UpdatedComponent = CollisionSphere;
@@ -19,6 +27,10 @@ AIFProjectile::AIFProjectile()
 
 	// InitializeProjectile sets Velocity in world space; never reinterpret it as local.
 	ProjectileMovement->bInitialVelocityInLocalSpace = false;
+
+	VFXComponent = CreateDefaultSubobject<UNiagaraComponent>(TEXT("VFXComponent"));
+	VFXComponent->SetupAttachment(RootComponent);
+	VFXComponent->bAutoActivate = true;
 
 	CollisionSphere->OnComponentBeginOverlap.AddDynamic(this, &AIFProjectile::HandleSphereBeginOverlap);
 	CollisionSphere->OnComponentHit.AddDynamic(this, &AIFProjectile::HandleSphereHit);
