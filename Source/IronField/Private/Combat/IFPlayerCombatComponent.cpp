@@ -295,7 +295,6 @@ void UIFPlayerCombatComponent::StopSpinImmediately()
 	ClearSpinState();
 	EndAttackCollision();
 	ResetRegisteredAttackHits();
-	SpinLastHitTimes.Reset();
 
 	UAnimInstance* const AnimInstance = GetAnimInstance();
 	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, SpinAttackMontage);

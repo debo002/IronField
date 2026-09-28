@@ -40,7 +40,6 @@ bool UBTDecorator_IFHasLineOfSight::CalculateRawConditionValue(UBehaviorTreeComp
 
 	FHitResult Hit;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(IFHasLineOfSight), false, ControlledPawn);
-	Params.AddIgnoredActor(ControlledPawn);
 	Params.AddIgnoredActor(TargetActor);
 
 	const FVector HeightOffset(0.f, 0.f, TraceHeightOffset);

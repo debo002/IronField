@@ -3,14 +3,19 @@
 #include "Building/IFStronghold.h"
 #include "Character/IFPlayerCharacter.h"
 #include "Components/Border.h"
+#include "Components/CanvasPanel.h"
+#include "Components/CanvasPanelSlot.h"
 #include "Components/TextBlock.h"
 #include "Core/IFLog.h"
 #include "Core/IFPlayerSubsystem.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Core/IFWaveManagerSubsystem.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
+#include "ShaderPipelineCache.h"
 #include "Stats/IFHealthComponent.h"
 #include "Stats/IFStaminaComponent.h"
+#include "Styling/CoreStyle.h"
 #include "TimerManager.h"
 #include "UI/IFStatBarWidget.h"
 #include "Wave/IFWaveManager.h"
@@ -28,6 +33,8 @@ void UIFHUD::NativeConstruct()
 	{
 		DamageFlash->SetRenderOpacity(0.f);
 	}
+
+	ShowLoadingVeil();
 
 	BindPlayerStatBars();
 
@@ -76,10 +83,13 @@ void UIFHUD::NativeConstruct()
 
 void UIFHUD::NativeDestruct()
 {
+	HideLoadingVeil();
+
 	if (UWorld* const World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(BannerTimerHandle);
 		World->GetTimerManager().ClearTimer(DamageFlashTimerHandle);
+		World->GetTimerManager().ClearTimer(LoadingVeilTimerHandle);
 
 		if (UIFStrongholdSubsystem* const Subsystem = World->GetSubsystem<UIFStrongholdSubsystem>())
 		{
@@ -435,5 +445,91 @@ void UIFHUD::HandleWaveClearHeal(int32 WaveNumber, float PlayerHealed, float Gat
 	else
 	{
 		ShowBanner(FString::Printf(TEXT("WAVE %d CLEARED"), WaveNumber));
+	}
+}
+
+void UIFHUD::ShowLoadingVeil()
+{
+	HideLoadingVeil();
+
+	UCanvasPanel* const Root = NewObject<UCanvasPanel>(this);
+	if (!Root)
+	{
+		return;
+	}
+
+	UBorder* const Background = NewObject<UBorder>(this);
+	if (Background)
+	{
+		Background->SetBrushColor(FLinearColor(0.f, 0.f, 0.f, 1.f));
+		if (UCanvasPanelSlot* const BGSlot = Root->AddChildToCanvas(Background))
+		{
+			BGSlot->SetAnchors(FAnchors(0.f, 0.f, 1.f, 1.f));
+			BGSlot->SetOffsets(FMargin(0.f));
+		}
+	}
+
+	UTextBlock* const Label = NewObject<UTextBlock>(this);
+	if (Label)
+	{
+		Label->SetText(FText::FromString(TEXT("LOADING...")));
+		Label->SetJustification(ETextJustify::Center);
+		Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 42));
+		if (UCanvasPanelSlot* const LabelSlot = Root->AddChildToCanvas(Label))
+		{
+			LabelSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
+			LabelSlot->SetAlignment(FVector2D(0.5f, 0.5f));
+			LabelSlot->SetOffsets(FMargin(0.f));
+		}
+	}
+
+	LoadingVeilRoot = Root;
+	LoadingVeilElapsed = 0.f;
+
+	UWorld* const World = GetWorld();
+	UGameViewportClient* const Viewport = World ? World->GetGameViewport() : nullptr;
+	if (!Viewport)
+	{
+		HideLoadingVeil();
+		return;
+	}
+	LoadingVeilSlate = Root->TakeWidget();
+	Viewport->AddViewportWidgetContent(LoadingVeilSlate.ToSharedRef(), 999);
+
+	FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &UIFHUD::PollLoadingVeil);
+	World->GetTimerManager().SetTimer(LoadingVeilTimerHandle, Delegate, FMath::Max(0.05f, LoadingVeilPollInterval), true);
+}
+
+void UIFHUD::PollLoadingVeil()
+{
+	LoadingVeilElapsed += FMath::Max(0.05f, LoadingVeilPollInterval);
+
+	// Precache compiles run async; lift the veil once nothing is outstanding.
+	// The timeout guarantees the veil can never hang the game.
+	if (FShaderPipelineCache::NumPrecompilesRemaining() == 0 || LoadingVeilElapsed >= LoadingVeilTimeoutSeconds)
+	{
+		HideLoadingVeil();
+	}
+}
+
+void UIFHUD::HideLoadingVeil()
+{
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(LoadingVeilTimerHandle);
+		if (UGameViewportClient* const Viewport = World->GetGameViewport())
+		{
+			if (LoadingVeilSlate.IsValid())
+			{
+				Viewport->RemoveViewportWidgetContent(LoadingVeilSlate.ToSharedRef());
+			}
+		}
+	}
+	LoadingVeilSlate.Reset();
+
+	if (LoadingVeilRoot)
+	{
+		LoadingVeilRoot->RemoveFromParent();
+		LoadingVeilRoot = nullptr;
 	}
 }

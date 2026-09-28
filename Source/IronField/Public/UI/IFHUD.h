@@ -13,6 +13,8 @@ class UIFHealthComponent;
 class UIFStaminaComponent;
 class UTextBlock;
 class UBorder;
+class UCanvasPanel;
+class SWidget;
 
 /**
  * Gameplay HUD root. Binds player and stronghold stat delegates and forwards
@@ -26,6 +28,14 @@ class IRONFIELD_API UIFHUD : public UUserWidget
 
 public:
 	void BindPlayerStatBars(AIFPlayerCharacter* InPlayer = nullptr);
+
+	// Loading veil: fullscreen cover held until outstanding PSO precache compiles
+	// finish (or the timeout hits, so it can never hang). Pure C++, no WBP work.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|HUD|Loading", meta = (ClampMin = "0.5"))
+	float LoadingVeilTimeoutSeconds = 8.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|HUD|Loading", meta = (ClampMin = "0.05"))
+	float LoadingVeilPollInterval = 0.1f;
 
 protected:
 	UPROPERTY(meta = (BindWidget))
@@ -81,6 +91,9 @@ private:
 	void HandleWaveClearHeal(int32 WaveNumber, float PlayerHealed, float GateRepaired);
 
 	UFUNCTION()
+	void PollLoadingVeil();
+
+	UFUNCTION()
 	void HandleWaveManagerRegistered(AIFWaveManager* WaveManager);
 
 	UFUNCTION()
@@ -98,6 +111,8 @@ private:
 	void FlashDamage();
 	void UpdateInfoLine();
 	void ApplyBarColors();
+	void ShowLoadingVeil();
+	void HideLoadingVeil();
 
 	TWeakObjectPtr<UIFHealthComponent> BoundPlayerHealth;
 	TWeakObjectPtr<UIFStaminaComponent> BoundPlayerStamina;
@@ -106,6 +121,14 @@ private:
 
 	FTimerHandle BannerTimerHandle;
 	FTimerHandle DamageFlashTimerHandle;
+	FTimerHandle LoadingVeilTimerHandle;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UCanvasPanel> LoadingVeilRoot;
+
+	TSharedPtr<SWidget> LoadingVeilSlate;
+
+	float LoadingVeilElapsed = 0.f;
 
 	float LastPlayerHealthPercent = 1.f;
 

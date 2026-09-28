@@ -507,6 +507,13 @@ void AIFWaveManager::BeginPlay()
 
 	CacheSpawnPoints();
 
+	// First-spawn hitch warmup entry: preload + render one of each spawnable class
+	// during the opening grace so shader/AnimBP/disk costs land before first contact.
+	if (bWarmupSpawns)
+	{
+		PreloadWaveAssets();
+	}
+
 	OnWaveCompleted.AddDynamic(this, &AIFWaveManager::HandleWaveClearHeal);
 	bWaveCompletedBound = true;
 
