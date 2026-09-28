@@ -15,8 +15,6 @@ class IRONFIELD_API AIFPlayerController : public APlayerController
 	GENERATED_BODY()
 
 public:
-	AIFPlayerController();
-
 	void ShowGameOverScreen(EIFGameResult Result);
 	void TogglePauseGame();
 	void ResumeGame();

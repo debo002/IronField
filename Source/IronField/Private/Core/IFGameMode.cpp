@@ -10,38 +10,14 @@
 #include "Core/IFWaveManagerSubsystem.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
-#include "UObject/ConstructorHelpers.h"
 #include "Wave/IFWaveManager.h"
-
-namespace
-{
-	constexpr const TCHAR* PlayerControllerClassPath = TEXT("/Game/IronField/Core/Gameplay/BP_PlayerController");
-	constexpr const TCHAR* PlayerPawnClassPath = TEXT("/Game/IronField/Characters/Player/BP_Player");
-}
 
 AIFGameMode::AIFGameMode()
 {
-	static ConstructorHelpers::FClassFinder<APlayerController> ControllerFinder(PlayerControllerClassPath);
-	if (ControllerFinder.Succeeded())
-	{
-		PlayerControllerClass = ControllerFinder.Class;
-	}
-	else
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-GameMode] BP_PlayerController not found; falling back to AIFPlayerController."));
-		PlayerControllerClass = AIFPlayerController::StaticClass();
-	}
-
-	static ConstructorHelpers::FClassFinder<APawn> PawnFinder(PlayerPawnClassPath);
-	if (PawnFinder.Succeeded())
-	{
-		DefaultPawnClass = PawnFinder.Class;
-	}
-	else
-	{
-		UE_LOG(LogIronField, Warning, TEXT("[IF-GameMode] BP_Player not found; falling back to AIFPlayerCharacter."));
-		DefaultPawnClass = AIFPlayerCharacter::StaticClass();
-	}
+	// C++ supplies the safe base-class defaults; BP_GameMode overrides these with the real
+	// Blueprint assets (Player Controller Class / Default Pawn Class) in its Class Defaults.
+	PlayerControllerClass = AIFPlayerController::StaticClass();
+	DefaultPawnClass = AIFPlayerCharacter::StaticClass();
 }
 
 void AIFGameMode::BeginPlay()
