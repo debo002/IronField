@@ -13,6 +13,11 @@
 
 namespace
 {
+	// Targeting curve: distance falloff plus the aggression-shaped candidate weights.
+	constexpr float DistanceFalloffRange = 800.f;
+	constexpr float PlayerWeightBase = 0.5f;
+	constexpr float StrongholdWeightBase = 1.5f;
+
 	bool IsUsableTarget(AActor* Actor)
 	{
 		if (!IsValid(Actor))
@@ -43,7 +48,7 @@ namespace
 	/** Soft distance desire: 1.0 in your face, fading with range. Same curve for both targets. */
 	float DistanceDesire(float Dist)
 	{
-		return 1.f / (1.f + Dist / 800.f);
+		return 1.f / (1.f + Dist / DistanceFalloffRange);
 	}
 }
 
@@ -100,7 +105,7 @@ void UBTService_IFFindTarget::ChooseTarget(UBehaviorTreeComponent& OwnerComp) co
 	const bool bGrudge = Enemy && (Now - Enemy->GetLastPlayerHitTime() < AIData->RetaliationSeconds);
 	if (bPlayerOk)
 	{
-		PlayerScore = DistanceDesire(FVector::Dist(Pawn->GetActorLocation(), Player->GetActorLocation())) * (0.5f + Aggression);
+		PlayerScore = DistanceDesire(FVector::Dist(Pawn->GetActorLocation(), Player->GetActorLocation())) * (PlayerWeightBase + Aggression);
 
 		// Grudge: a recent player hit multiplies player desire and breaks commitment.
 		if (bGrudge)
@@ -112,7 +117,7 @@ void UBTService_IFFindTarget::ChooseTarget(UBehaviorTreeComponent& OwnerComp) co
 	float StrongholdScore = 0.f;
 	if (bStrongholdOk)
 	{
-		StrongholdScore = DistanceDesire(FVector::Dist(Pawn->GetActorLocation(), Stronghold->GetActorLocation())) * (1.5f - Aggression);
+		StrongholdScore = DistanceDesire(FVector::Dist(Pawn->GetActorLocation(), Stronghold->GetActorLocation())) * (StrongholdWeightBase - Aggression);
 	}
 
 	// Champion = highest raw score; nothing valid → null (clears dead targets).

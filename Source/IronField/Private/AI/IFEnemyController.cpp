@@ -12,6 +12,11 @@
 #include "Stats/IFHealthComponent.h"
 #include "Wave/IFWaveManager.h"
 
+namespace
+{
+	constexpr float FallbackAggressionSpread = 0.35f;
+}
+
 const UIFEnemyAIData* AIFEnemyController::GetAIData() const
 {
 	return AIData ? AIData.Get() : GetDefault<UIFEnemyAIData>();
@@ -78,7 +83,7 @@ void AIFEnemyController::InitializeControlledPawn()
 	if (AIFEnemyCharacter* const EnemyChar = Cast<AIFEnemyCharacter>(GetPawn()))
 	{
 		const UIFEnemyAIData* const Data = GetAIData();
-		const float Spread = Data ? Data->AggressionSpread : 0.35f;
+		const float Spread = Data ? Data->AggressionSpread : FallbackAggressionSpread;
 		const float Bias = CachedWaveManager ? CachedWaveManager->GetSiegeBiasForWave() : 0.f;
 		EnemyChar->RollAggression(Bias, Spread);
 	}

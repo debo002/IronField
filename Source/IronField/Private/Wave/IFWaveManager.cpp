@@ -20,6 +20,14 @@
 #include "TimerManager.h"
 #include "Wave/IFEnemySpawnPoint.h"
 
+namespace
+{
+	constexpr float NextFrameTimerDelay = 0.01f;
+	constexpr float PickupGroundTraceDistance = 500.f;
+	constexpr float TraceMissGroundOffset = 10.f;
+	constexpr float MinWarmupLifetime = 0.1f;
+}
+
 AIFWaveManager::AIFWaveManager()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -139,7 +147,7 @@ void AIFWaveManager::ScheduleNextWave()
 		// Never recurse same-frame: a chain of empty waves would deepen the stack
 		// once per wave. A single-tick defer keeps the rhythm tight without recursion.
 		FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::HandleInterWaveTimer, WaveGeneration);
-		World->GetTimerManager().SetTimer(InterWaveTimerHandle, Delegate, 0.01f, false);
+		World->GetTimerManager().SetTimer(InterWaveTimerHandle, Delegate, NextFrameTimerDelay, false);
 		return;
 	}
 
@@ -699,13 +707,13 @@ void AIFWaveManager::TrySpawnHealPickup(AIFBaseCharacter* DeadEnemy)
 	FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(PickupSpawnTrace), false, DeadEnemy);
 	TraceParams.bReturnPhysicalMaterial = false;
 	TraceParams.bTraceComplex = true;
-	if (World->LineTraceSingleByChannel(HitResult, SpawnLocation, SpawnLocation - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, TraceParams))
+	if (World->LineTraceSingleByChannel(HitResult, SpawnLocation, SpawnLocation - FVector(0.f, 0.f, PickupGroundTraceDistance), ECC_WorldStatic, TraceParams))
 	{
 		SpawnLocation = HitResult.Location;
 	}
 	else
 	{
-		SpawnLocation.Z += 10.f; // slight offset above ground if no trace hit
+		SpawnLocation.Z += TraceMissGroundOffset; // slight offset above ground if no trace hit
 	}
 
 	FActorSpawnParameters SpawnParams;
@@ -869,7 +877,7 @@ void AIFWaveManager::WarmupSpawnActors()
 	PlayWaveStartFeedback();
 
 	FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::CleanupWarmupActors);
-	World->GetTimerManager().SetTimer(WarmupTimerHandle, Delegate, FMath::Max(0.1f, WarmupLifetimeSeconds), false);
+	World->GetTimerManager().SetTimer(WarmupTimerHandle, Delegate, FMath::Max(MinWarmupLifetime, WarmupLifetimeSeconds), false);
 }
 
 void AIFWaveManager::CleanupWarmupActors()

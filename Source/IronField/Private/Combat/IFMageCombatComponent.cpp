@@ -9,6 +9,11 @@
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/Pawn.h"
 
+namespace
+{
+	constexpr float SpawnClearancePadding = 20.f;
+}
+
 void UIFMageCombatComponent::StartAttack()
 {
 	if (IsDead() || IsAttacking() || !CastMontage)
@@ -83,7 +88,7 @@ void UIFMageCombatComponent::LaunchProjectileAttack()
 	{
 		const AIFProjectile* const ProjectileCDO = ProjectileClass->GetDefaultObject<AIFProjectile>();
 		const float ProjectileRadius = ProjectileCDO ? ProjectileCDO->GetCollisionSphereRadius() : 0.f;
-		ClearanceRadius = FMath::Max(ClearanceRadius, OwnerCapsule->GetScaledCapsuleRadius() + ProjectileRadius + 20.f);
+		ClearanceRadius = FMath::Max(ClearanceRadius, OwnerCapsule->GetScaledCapsuleRadius() + ProjectileRadius + SpawnClearancePadding);
 	}
 
 	FIFProjectileSpawnArgs Args;

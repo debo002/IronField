@@ -12,6 +12,11 @@
 #include "GameFramework/Character.h"
 #include "Stats/IFStaminaComponent.h"
 
+namespace
+{
+	constexpr float AttackBlendOutTime = 0.15f;
+}
+
 UIFCombatComponent::UIFCombatComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -57,7 +62,7 @@ void UIFCombatComponent::CancelAttack()
 	{
 		if (ActiveAttackMontage)
 		{
-			AnimInstance->Montage_Stop(0.15f, ActiveAttackMontage);
+			AnimInstance->Montage_Stop(AttackBlendOutTime, ActiveAttackMontage);
 		}
 	}
 

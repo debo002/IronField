@@ -20,6 +20,18 @@
 #include "UI/IFStatBarWidget.h"
 #include "Wave/IFWaveManager.h"
 
+namespace
+{
+	constexpr float BannerDisplaySeconds = 3.f;
+	constexpr float DamageFlashOpacity = 0.45f;
+	constexpr float DamageFlashSeconds = 0.3f;
+	constexpr int32 LoadingVeilFontSize = 42;
+	constexpr int32 LoadingVeilZOrder = 999;
+
+	// Mirrors the ClampMin on the header's LoadingVeilPollInterval.
+	constexpr float MinLoadingVeilPollInterval = 0.05f;
+}
+
 void UIFHUD::NativeConstruct()
 {
 	Super::NativeConstruct();
@@ -332,7 +344,7 @@ void UIFHUD::ShowBanner(const FString& BannerString)
 	if (UWorld* const World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(BannerTimerHandle);
-		World->GetTimerManager().SetTimer(BannerTimerHandle, this, &UIFHUD::HideBanner, 3.f, false);
+		World->GetTimerManager().SetTimer(BannerTimerHandle, this, &UIFHUD::HideBanner, BannerDisplaySeconds, false);
 	}
 }
 
@@ -351,12 +363,12 @@ void UIFHUD::FlashDamage()
 		return;
 	}
 
-	DamageFlash->SetRenderOpacity(0.45f);
+	DamageFlash->SetRenderOpacity(DamageFlashOpacity);
 
 	if (UWorld* const World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(DamageFlashTimerHandle);
-		World->GetTimerManager().SetTimer(DamageFlashTimerHandle, this, &UIFHUD::HideDamageFlash, 0.3f, false);
+		World->GetTimerManager().SetTimer(DamageFlashTimerHandle, this, &UIFHUD::HideDamageFlash, DamageFlashSeconds, false);
 	}
 }
 
@@ -474,7 +486,7 @@ void UIFHUD::ShowLoadingVeil()
 	{
 		Label->SetText(FText::FromString(TEXT("LOADING...")));
 		Label->SetJustification(ETextJustify::Center);
-		Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 42));
+		Label->SetFont(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), LoadingVeilFontSize));
 		if (UCanvasPanelSlot* const LabelSlot = Root->AddChildToCanvas(Label))
 		{
 			LabelSlot->SetAnchors(FAnchors(0.5f, 0.5f, 0.5f, 0.5f));
@@ -494,15 +506,15 @@ void UIFHUD::ShowLoadingVeil()
 		return;
 	}
 	LoadingVeilSlate = Root->TakeWidget();
-	Viewport->AddViewportWidgetContent(LoadingVeilSlate.ToSharedRef(), 999);
+	Viewport->AddViewportWidgetContent(LoadingVeilSlate.ToSharedRef(), LoadingVeilZOrder);
 
 	FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &UIFHUD::PollLoadingVeil);
-	World->GetTimerManager().SetTimer(LoadingVeilTimerHandle, Delegate, FMath::Max(0.05f, LoadingVeilPollInterval), true);
+	World->GetTimerManager().SetTimer(LoadingVeilTimerHandle, Delegate, FMath::Max(MinLoadingVeilPollInterval, LoadingVeilPollInterval), true);
 }
 
 void UIFHUD::PollLoadingVeil()
 {
-	LoadingVeilElapsed += FMath::Max(0.05f, LoadingVeilPollInterval);
+	LoadingVeilElapsed += FMath::Max(MinLoadingVeilPollInterval, LoadingVeilPollInterval);
 
 	// Precache compiles run async; lift the veil once nothing is outstanding.
 	// The timeout guarantees the veil can never hang the game.

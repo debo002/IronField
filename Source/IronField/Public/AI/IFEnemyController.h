@@ -42,7 +42,10 @@ protected:
 	FName TargetActorKeyName = IFAI::TargetActorKey;
 
 private:
-	float LastAttackEndedTime = -1.f;
+	// Negative sentinel = "no attack has ended yet", so IsReadyForNewAttack() returns true.
+	static constexpr float NeverAttackEndedTime = -1.f;
+
+	float LastAttackEndedTime = NeverAttackEndedTime;
 	float CurrentReattackCooldownSeconds = 0.f;
 
 	UPROPERTY(Transient)

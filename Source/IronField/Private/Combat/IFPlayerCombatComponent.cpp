@@ -7,6 +7,11 @@
 #include "Engine/World.h"
 #include "Stats/IFStaminaComponent.h"
 
+namespace
+{
+	constexpr float MinBlendOutTime = 0.01f;
+}
+
 void UIFPlayerCombatComponent::StartAttack()
 {
 	if (IsDead() || IsBlocking() || bIsSpinning)
@@ -372,7 +377,7 @@ void UIFPlayerCombatComponent::PlayBlockReactionMontage()
 
 	if (BlockMontage && AnimInstance->Montage_IsPlaying(BlockMontage))
 	{
-		AnimInstance->Montage_Stop(FMath::Max(0.01f, BlockBlendOutTime), BlockMontage);
+		AnimInstance->Montage_Stop(FMath::Max(MinBlendOutTime, BlockBlendOutTime), BlockMontage);
 	}
 
 	IFAnimMontageUtils::ClearMontageEndDelegate(AnimInstance, BlockReactionMontage);
