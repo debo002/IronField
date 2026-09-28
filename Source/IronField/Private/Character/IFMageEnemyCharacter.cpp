@@ -7,6 +7,12 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Stats/IFHealthComponent.h"
 
+namespace
+{
+	constexpr float MageDefaultCombatRange = 700.f;
+	constexpr float MageDefaultMaxHealth = 50.f;
+}
+
 AIFMageEnemyCharacter::AIFMageEnemyCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer
 		.SetDefaultSubobjectClass<UIFMageCombatComponent>(TEXT("Combat"))
@@ -14,12 +20,12 @@ AIFMageEnemyCharacter::AIFMageEnemyCharacter(const FObjectInitializer& ObjectIni
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	CombatRange = 700.f;
+	CombatRange = MageDefaultCombatRange;
 
 	// 2 player combo hits to kill. BP can still override.
 	if (UIFHealthComponent* const Health = GetHealthComponent())
 	{
-		Health->SetMaxHealth(50.f);
+		Health->SetMaxHealth(MageDefaultMaxHealth);
 	}
 
 	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())

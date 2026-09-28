@@ -50,13 +50,16 @@ protected:
 	UPROPERTY(Transient)
 	float Aggression = 0.5f;
 
-	/** World time of the last player-caused hit; -1000 = never. */
-	UPROPERTY(Transient)
-	float LastPlayerHitTime = -1000.f;
+	/** Sentinel: large-negative so the (Now - last < window) test stays false until a real stamp is recorded. */
+	static constexpr float NeverTimestamp = -1000.f;
 
-	/** World time of the last target switch; -1000 = never. */
+	/** World time of the last player-caused hit; NeverTimestamp = never. */
 	UPROPERTY(Transient)
-	float LastTargetSwitchTime = -1000.f;
+	float LastPlayerHitTime = NeverTimestamp;
+
+	/** World time of the last target switch; NeverTimestamp = never. */
+	UPROPERTY(Transient)
+	float LastTargetSwitchTime = NeverTimestamp;
 	UPROPERTY(EditDefaultsOnly, Category = "IronField|Enemy|Combat", meta = (ClampMin = "1.0", ToolTip = "Extra distance allowed between the enemy and target collision surfaces before attacking. Set this to the weapon's actual reach in the enemy Blueprint."))
 	float CombatRange = 80.f;
 

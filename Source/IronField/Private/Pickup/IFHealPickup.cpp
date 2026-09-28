@@ -10,13 +10,18 @@
 #include "Stats/IFHealthComponent.h"
 #include "TimerManager.h"
 
+namespace
+{
+	constexpr float PickupCollisionRadius = 100.f;
+}
+
 AIFHealPickup::AIFHealPickup()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = true;
 
 	CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
-	CollisionComponent->SetSphereRadius(100.f);
+	CollisionComponent->SetSphereRadius(PickupCollisionRadius);
 	CollisionComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	CollisionComponent->SetCollisionObjectType(ECC_WorldDynamic);
 	CollisionComponent->SetCollisionResponseToAllChannels(ECR_Ignore);

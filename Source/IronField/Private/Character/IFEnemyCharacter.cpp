@@ -2,13 +2,18 @@
 
 #include "GameFramework/CharacterMovementComponent.h"
 
+namespace
+{
+	constexpr float DefaultAvoidanceWeight = 0.5f;
+}
+
 AIFEnemyCharacter::AIFEnemyCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer)
 {
 	if (UCharacterMovementComponent* const Movement = GetCharacterMovement())
 	{
 		Movement->bUseRVOAvoidance = true;
-		Movement->AvoidanceWeight = 0.5f;
+		Movement->AvoidanceWeight = DefaultAvoidanceWeight;
 		Movement->bOrientRotationToMovement = true;
 	}
 }

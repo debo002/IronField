@@ -15,6 +15,12 @@
 #include "Stats/IFStaminaComponent.h"
 #include "TimerManager.h"
 
+namespace
+{
+	constexpr float PlayerDefaultMaxHealth = 150.f;
+	constexpr float PlayerDefaultReviveHealth = 60.f;
+}
+
 AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UIFPlayerCombatComponent>(TEXT("Combat")))
 {
@@ -45,8 +51,8 @@ AIFPlayerCharacter::AIFPlayerCharacter(const FObjectInitializer& ObjectInitializ
 	// Tuned HP pool: survives ~9 melee hits (16 dmg). BP can still override.
 	if (UIFHealthComponent* const Health = GetHealthComponent())
 	{
-		Health->SetMaxHealth(150.f);
-		Health->SetReviveHealth(60.f);
+		Health->SetMaxHealth(PlayerDefaultMaxHealth);
+		Health->SetReviveHealth(PlayerDefaultReviveHealth);
 	}
 }
 

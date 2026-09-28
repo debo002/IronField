@@ -3,6 +3,12 @@
 #include "Core/IFLog.h"
 #include "GameFramework/Actor.h"
 
+namespace
+{
+	// Health is never allowed to drop below this floor.
+	constexpr float MinHealthValue = 1.f;
+}
+
 void UIFHealthComponent::ApplyDamage(float Amount)
 {
 	if (bIsDead || bIsInvincible || Amount <= 0.f)
@@ -43,12 +49,12 @@ void UIFHealthComponent::Revive()
 	}
 
 	bIsDead = false;
-	SetHealthClamped(FMath::Clamp(ReviveHealth, 1.f, MaxHealth));
+	SetHealthClamped(FMath::Clamp(ReviveHealth, MinHealthValue, MaxHealth));
 }
 
 void UIFHealthComponent::SetMaxHealth(float NewMaxHealth, bool bFillHealthToMax)
 {
-	MaxHealth = FMath::Max(1.f, NewMaxHealth);
+	MaxHealth = FMath::Max(MinHealthValue, NewMaxHealth);
 	ReviveHealth = FMath::Min(ReviveHealth, MaxHealth);
 
 	if (bFillHealthToMax || CurrentHealth > MaxHealth)
@@ -59,14 +65,14 @@ void UIFHealthComponent::SetMaxHealth(float NewMaxHealth, bool bFillHealthToMax)
 
 void UIFHealthComponent::SetReviveHealth(float NewReviveHealth)
 {
-	ReviveHealth = FMath::Clamp(NewReviveHealth, 1.f, MaxHealth);
+	ReviveHealth = FMath::Clamp(NewReviveHealth, MinHealthValue, MaxHealth);
 }
 
 void UIFHealthComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	MaxHealth = FMath::Max(1.f, MaxHealth);
+	MaxHealth = FMath::Max(MinHealthValue, MaxHealth);
 	CurrentHealth = MaxHealth;
 	bIsDead = false;
 

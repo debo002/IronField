@@ -7,6 +7,13 @@
 #include "Engine/World.h"
 #include "Stats/IFHealthComponent.h"
 
+namespace
+{
+	// Sole lose condition: survives ~50 melee hits @16 / ~80 mage hits @10.
+	// Pure HP pool with no regen. BP can still override via the health component.
+	constexpr float StrongholdDefaultMaxHealth = 800.f;
+}
+
 AIFStronghold::AIFStronghold()
 {
 	PrimaryActorTick.bCanEverTick = false;
@@ -19,9 +26,7 @@ AIFStronghold::AIFStronghold()
 
 	HealthComponent = CreateDefaultSubobject<UIFHealthComponent>(TEXT("HealthComponent"));
 
-	// Sole lose condition: survives ~50 melee hits @16 / ~80 mage hits @10.
-	// Pure HP pool with no regen. BP can still override.
-	HealthComponent->SetMaxHealth(800.f);
+	HealthComponent->SetMaxHealth(StrongholdDefaultMaxHealth);
 }
 
 void AIFStronghold::BeginPlay()
