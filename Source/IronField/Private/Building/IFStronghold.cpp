@@ -1,5 +1,7 @@
 #include "Building/IFStronghold.h"
 
+#include "Components/SceneComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Core/IFFeedbackUtils.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Engine/World.h"
