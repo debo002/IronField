@@ -628,55 +628,48 @@ void AIFWaveManager::HandleWaveClearHeal(int32 WaveNumber)
 
 	if (UWorld* const World = GetWorld())
 	{
+		// Player heal and stronghold repair are the same step; only the fetched Health, the
+		// percent, the recorded out-value, the log text, and the FX actor differ, so they are passed in.
+		auto ApplyClearHeal = [this, World](UIFHealthComponent* Health, float Percent, float& OutAmount,
+			const TCHAR* HealLabel, const TCHAR* SkipMessage, const AActor* FxActor)
+		{
+			if (!Health)
+			{
+				return;
+			}
+
+			if (Health->IsDead())
+			{
+				UE_LOG(LogIronField, Log, TEXT("%s"), SkipMessage);
+				return;
+			}
+
+			const float Amount = Health->GetMaxHealth() * Percent;
+			Health->ApplyHealing(Amount);
+			OutAmount = Amount;
+			UE_LOG(LogIronField, Log, TEXT("[IF-Heal] %s %.0f (%.0f%% of %.0f max)."), HealLabel, Amount, Percent * 100.f, Health->GetMaxHealth());
+
+			if (HealSound)
+			{
+				IFFeedbackUtils::PlayAtLocation(World, HealSound, nullptr, FxActor->GetActorLocation());
+			}
+		};
+
 		// Heal player
 		if (UIFPlayerSubsystem* const PlayerSubsystem = World->GetSubsystem<UIFPlayerSubsystem>())
 		{
 			if (AIFPlayerCharacter* const Player = PlayerSubsystem->GetPlayer())
 			{
-				if (UIFHealthComponent* const Health = Player->GetHealthComponent())
-				{
-					if (!Health->IsDead())
-					{
-						const float HealAmount = Health->GetMaxHealth() * PlayerHealPercent;
-						Health->ApplyHealing(HealAmount);
-						PlayerHealed = HealAmount;
-						UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Player healed %.0f (%.0f%% of %.0f max)."), HealAmount, PlayerHealPercent * 100.f, Health->GetMaxHealth());
-
-					if (HealSound)
-					{
-						IFFeedbackUtils::PlayAtLocation(World, HealSound, nullptr, Player->GetActorLocation());
-					}
-					}
-					else
-					{
-						UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Player dead - skipping heal."));
-					}
-				}
+				ApplyClearHeal(Player->GetHealthComponent(), PlayerHealPercent, PlayerHealed,
+					TEXT("Player healed"), TEXT("[IF-Heal] Player dead - skipping heal."), Player);
 			}
 		}
 
 		// Repair stronghold
 		if (AActor* const StrongholdActor = GetStrongholdActor())
 		{
-			if (UIFHealthComponent* const Health = StrongholdActor->FindComponentByClass<UIFHealthComponent>())
-			{
-				if (!Health->IsDead())
-				{
-					const float RepairAmount = Health->GetMaxHealth() * StrongholdRepairPercent;
-					Health->ApplyHealing(RepairAmount);
-					GateRepaired = RepairAmount;
-					UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Stronghold repaired %.0f (%.0f%% of %.0f max)."), RepairAmount, StrongholdRepairPercent * 100.f, Health->GetMaxHealth());
-
-					if (HealSound)
-					{
-						IFFeedbackUtils::PlayAtLocation(World, HealSound, nullptr, StrongholdActor->GetActorLocation());
-					}
-				}
-				else
-				{
-					UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Stronghold destroyed - skipping repair."));
-				}
-			}
+			ApplyClearHeal(StrongholdActor->FindComponentByClass<UIFHealthComponent>(), StrongholdRepairPercent, GateRepaired,
+				TEXT("Stronghold repaired"), TEXT("[IF-Heal] Stronghold destroyed - skipping repair."), StrongholdActor);
 		}
 	}
 
