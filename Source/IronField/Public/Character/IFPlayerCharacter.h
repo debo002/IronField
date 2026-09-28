@@ -7,7 +7,6 @@
 #include "IFPlayerCharacter.generated.h"
 
 class UCameraComponent;
-class UEnhancedInputComponent;
 class UInputAction;
 class UInputMappingContext;
 class USpringArmComponent;

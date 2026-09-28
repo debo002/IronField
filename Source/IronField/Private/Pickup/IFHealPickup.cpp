@@ -7,7 +7,6 @@
 #include "Components/SphereComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
-#include "GameFramework/Pawn.h"
 #include "Stats/IFHealthComponent.h"
 #include "TimerManager.h"
 

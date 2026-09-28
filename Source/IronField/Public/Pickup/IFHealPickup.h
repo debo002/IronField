@@ -6,9 +6,7 @@
 
 class USphereComponent;
 class UStaticMeshComponent;
-class UStaticMesh;
 class USoundBase;
-class UIFHealthComponent;
 
 UCLASS(Blueprintable, BlueprintType)
 class IRONFIELD_API AIFHealPickup : public AActor

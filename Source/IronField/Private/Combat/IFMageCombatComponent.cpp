@@ -7,7 +7,6 @@
 #include "Combat/IFProjectile.h"
 #include "Combat/IFCombatTargetingUtils.h"
 #include "Components/CapsuleComponent.h"
-#include "Core/IFAnimMontageUtils.h"
 #include "GameFramework/Pawn.h"
 
 void UIFMageCombatComponent::StartAttack()

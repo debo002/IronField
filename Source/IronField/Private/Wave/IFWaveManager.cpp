@@ -2,10 +2,8 @@
 
 #include "Building/IFStronghold.h"
 #include "Character/IFBaseCharacter.h"
-#include "Character/IFEnemyCharacter.h"
 #include "Character/IFPlayerCharacter.h"
 #include "Combat/IFMageCombatComponent.h"
-#include "Combat/IFMeleeCombatComponent.h"
 #include "Combat/IFProjectile.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
