@@ -237,15 +237,12 @@ void UIFHUD::BindWaveManager(AIFWaveManager* WaveManager)
 	HandleEnemiesAliveChanged(WaveManager->EnemiesAlive);
 	HandleKillCountChanged(WaveManager->GetKillCount());
 
-	// The initial push calls ShowBanner via HandleWaveStarted; hide it again when the
-	// manager has not actually started a wave yet (HUD constructed first ordering).
+	// The initial push calls ShowBanner via HandleWaveStarted; when the manager has not
+	// actually started a wave yet (HUD constructed first ordering), show the warmup
+	// banner instead — first-spawn shader/asset costs land behind it, not mid-fight.
 	if (!WaveManager->bIsWaveActive && BannerText)
 	{
-		if (UWorld* const World = GetWorld())
-		{
-			World->GetTimerManager().ClearTimer(BannerTimerHandle);
-		}
-		HideBanner();
+		ShowBanner(TEXT("GET READY"));
 	}
 }
 

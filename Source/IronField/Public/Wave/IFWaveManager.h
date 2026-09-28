@@ -138,6 +138,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IronField|Wave|Feedback")
 	TObjectPtr<USoundBase> HealSound;
 
+	// First-spawn hitch warmup: during the opening grace, preload every class the run
+	// can spawn and render one of each for a few frames so shader/AnimBP/disk costs
+	// land before first contact instead of mid-fight.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Warmup")
+	bool bWarmupSpawns = true;
+
+	// How long warmup actors stay alive; must cover several rendered frames.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "IronField|Wave|Warmup", meta = (ClampMin = "0.1"))
+	float WarmupLifetimeSeconds = 0.35f;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "IronField|Wave|State")
 	int32 TotalEnemiesInWave = 0;
 
@@ -194,9 +204,17 @@ private:
 	UPROPERTY(Transient)
 	TArray<TSubclassOf<AIFBaseCharacter>> PendingSpawns;
 
+	// Warmup dummies: spawned visible for a few frames during the opening grace,
+	// never tracked as wave enemies, destroyed by CleanupWarmupActors.
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<AActor>> WarmupActors;
+
+	bool bWarmedUp = false;
+
 	FTimerHandle InterWaveTimerHandle;
 	FTimerHandle SpawnTimerHandle;
 	FTimerHandle ValidateTimerHandle;
+	FTimerHandle WarmupTimerHandle;
 
 	// Generation counter for async identity: bumped on every BeginWaveFromDefinition
 	// and EndPlay; timer delegates capture the scheduling generation and drop stale firings.
@@ -239,6 +257,15 @@ private:
 	void HandleWaveClearHeal(int32 WaveNumber);
 
 	void TrySpawnHealPickup(AIFBaseCharacter* DeadEnemy);
+
+	// First-spawn hitch warmup (see bWarmupSpawns).
+	void PreloadWaveAssets();
+	void CollectWarmupEnemyClasses(TArray<TSubclassOf<AIFBaseCharacter>>& OutClasses) const;
+	UFUNCTION()
+	void HandleWarmupAssetsLoaded();
+	void WarmupSpawnActors();
+	UFUNCTION()
+	void CleanupWarmupActors();
 
 	void BindPlayer(AIFPlayerCharacter* Player);
 	void UnbindPlayer();

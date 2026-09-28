@@ -24,6 +24,9 @@ public:
 	/** Multiplies per-instance damage for wave scaling. */
 	void ApplyDamageScale(float Multiplier) { AttackDamage = FMath::Max(0.f, AttackDamage * Multiplier); }
 
+	UFUNCTION(BlueprintPure, Category = "IronField|Enemy|Projectile")
+	TSubclassOf<AIFProjectile> GetProjectileClass() const { return ProjectileClass; }
+
 protected:
 	virtual float GetCurrentAttackDamage() const override { return AttackDamage; }
 	virtual TSubclassOf<UDamageType> GetCurrentDamageTypeClass() const override { return DamageTypeClass; }

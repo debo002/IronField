@@ -6,13 +6,16 @@
 #include "Character/IFPlayerCharacter.h"
 #include "Combat/IFMageCombatComponent.h"
 #include "Combat/IFMeleeCombatComponent.h"
+#include "Combat/IFProjectile.h"
 #include "Core/IFGameInstance.h"
 #include "Core/IFLog.h"
 #include "Core/IFPlayerSubsystem.h"
 #include "Core/IFStrongholdSubsystem.h"
 #include "Core/IFWaveManagerSubsystem.h"
 #include "Core/IFFeedbackUtils.h"
+#include "Engine/AssetManager.h"
 #include "Engine/World.h"
+#include "GameFramework/Controller.h"
 #include "Kismet/GameplayStatics.h"
 #include "Pickup/IFHealPickup.h"
 #include "Stats/IFHealthComponent.h"
@@ -532,10 +535,13 @@ void AIFWaveManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		World->GetTimerManager().ClearTimer(InterWaveTimerHandle);
 		World->GetTimerManager().ClearTimer(SpawnTimerHandle);
 		World->GetTimerManager().ClearTimer(ValidateTimerHandle);
+		World->GetTimerManager().ClearTimer(WarmupTimerHandle);
 	}
 
 	// Invalidate timer callbacks already in flight during teardown.
 	WaveGeneration++;
+
+	CleanupWarmupActors();
 
 	if (bWaveCompletedBound)
 	{
@@ -706,4 +712,169 @@ void AIFWaveManager::TrySpawnHealPickup(AIFBaseCharacter* DeadEnemy)
 		Pickup->HealAmount = PickupHealAmount;
 		UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Spawned heal pickup at %s (amount=%.0f)."), *SpawnLocation.ToString(), PickupHealAmount);
 	}
+}
+
+void AIFWaveManager::CollectWarmupEnemyClasses(TArray<TSubclassOf<AIFBaseCharacter>>& OutClasses) const
+{
+	OutClasses.Reset();
+
+	auto AddGroups = [&](const FWaveDefinition& Wave)
+	{
+		for (const FEnemyGroupDefinition& Group : Wave.EnemyGroups)
+		{
+			if (Group.EnemyClass)
+			{
+				OutClasses.AddUnique(Group.EnemyClass);
+			}
+		}
+	};
+
+	for (const FWaveDefinition& Wave : Waves)
+	{
+		AddGroups(Wave);
+	}
+	AddGroups(UnlimitedBaseWave);
+}
+
+void AIFWaveManager::PreloadWaveAssets()
+{
+	TArray<TSubclassOf<AIFBaseCharacter>> Enemies;
+	CollectWarmupEnemyClasses(Enemies);
+
+	TArray<FSoftObjectPath> Paths;
+	for (const TSubclassOf<AIFBaseCharacter>& EnemyClass : Enemies)
+	{
+		if (EnemyClass)
+		{
+			Paths.AddUnique(FSoftObjectPath(EnemyClass));
+		}
+	}
+	if (HealPickupClass)
+	{
+		Paths.AddUnique(FSoftObjectPath(HealPickupClass));
+	}
+	if (WaveStartSound)
+	{
+		Paths.AddUnique(FSoftObjectPath(WaveStartSound));
+	}
+	if (HealSound)
+	{
+		Paths.AddUnique(FSoftObjectPath(HealSound));
+	}
+
+	if (Paths.Num() <= 0)
+	{
+		return;
+	}
+
+	FStreamableManager& Streamable = UAssetManager::GetStreamableManager();
+	Streamable.RequestAsyncLoad(Paths, FStreamableDelegate::CreateUObject(this, &AIFWaveManager::HandleWarmupAssetsLoaded));
+}
+
+void AIFWaveManager::HandleWarmupAssetsLoaded()
+{
+	if (bWarmedUp || !GetWorld())
+	{
+		return;
+	}
+	bWarmedUp = true;
+	WarmupSpawnActors();
+}
+
+void AIFWaveManager::WarmupSpawnActors()
+{
+	UWorld* const World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const FVector Center = GetActorLocation() + FVector(0.f, 0.f, 100.f);
+
+	TArray<TSubclassOf<AIFBaseCharacter>> Enemies;
+	CollectWarmupEnemyClasses(Enemies);
+
+	TSubclassOf<AIFProjectile> WarmupProjectileClass = nullptr;
+	for (const TSubclassOf<AIFBaseCharacter>& EnemyClass : Enemies)
+	{
+		if (!EnemyClass)
+		{
+			continue;
+		}
+
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+		AIFBaseCharacter* const Dummy = World->SpawnActor<AIFBaseCharacter>(EnemyClass, Center, FRotator::ZeroRotator, SpawnParams);
+		if (!Dummy)
+		{
+			continue;
+		}
+
+		// Dummies never fight and never count: no controller brain, no collision,
+		// no wave tracking, no death delegates. They exist only to render a few frames.
+		if (AController* Ctrl = Dummy->GetController())
+		{
+			Ctrl->UnPossess();
+			Ctrl->Destroy();
+		}
+		Dummy->SetActorEnableCollision(false);
+		WarmupActors.Add(Dummy);
+
+		if (!WarmupProjectileClass)
+		{
+			if (UIFCombatComponent* Combat = Dummy->GetCombatComponent())
+			{
+				if (UIFMageCombatComponent* Mage = Cast<UIFMageCombatComponent>(Combat))
+				{
+					WarmupProjectileClass = Mage->GetProjectileClass();
+				}
+			}
+		}
+	}
+
+	if (WarmupProjectileClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+		// Zero-damage shot straight up: primes projectile render/audio with no one to hit.
+		if (AIFProjectile* const Shot = World->SpawnActor<AIFProjectile>(WarmupProjectileClass, Center + FVector(0.f, 0.f, 200.f), FRotator::ZeroRotator, SpawnParams))
+		{
+			FIFProjectileSpawnArgs Args;
+			Args.SpawnLocation = Shot->GetActorLocation();
+			Args.LaunchDirection = FVector::UpVector;
+			Args.Damage = 0.f;
+			Shot->InitializeProjectile(Args);
+			WarmupActors.Add(Shot);
+		}
+	}
+
+	if (HealPickupClass)
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		if (AIFHealPickup* const Pickup = World->SpawnActor<AIFHealPickup>(HealPickupClass, Center, FRotator::ZeroRotator, SpawnParams))
+		{
+			WarmupActors.Add(Pickup);
+		}
+	}
+
+	// Prime wave-start sound+VFX early; reads as the opening horn under GET READY.
+	PlayWaveStartFeedback();
+
+	FTimerDelegate Delegate = FTimerDelegate::CreateUObject(this, &AIFWaveManager::CleanupWarmupActors);
+	World->GetTimerManager().SetTimer(WarmupTimerHandle, Delegate, FMath::Max(0.1f, WarmupLifetimeSeconds), false);
+}
+
+void AIFWaveManager::CleanupWarmupActors()
+{
+	for (TObjectPtr<AActor>& Actor : WarmupActors)
+	{
+		if (Actor)
+		{
+			Actor->Destroy();
+		}
+	}
+	WarmupActors.Empty();
 }
