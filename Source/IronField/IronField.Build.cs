@@ -14,12 +14,12 @@ public class IronField : ModuleRules
 			"UMG",
 			"AIModule",
 			"Niagara",
-			"RenderCore",
 			"SlateCore"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			"NavigationSystem"
+			"NavigationSystem",
+			"RenderCore"
 		});
 
 	}
