@@ -13,9 +13,15 @@
 #include "UObject/ConstructorHelpers.h"
 #include "Wave/IFWaveManager.h"
 
+namespace
+{
+	constexpr const TCHAR* PlayerControllerClassPath = TEXT("/Game/IronField/Core/Gameplay/BP_PlayerController");
+	constexpr const TCHAR* PlayerPawnClassPath = TEXT("/Game/IronField/Characters/Player/BP_Player");
+}
+
 AIFGameMode::AIFGameMode()
 {
-	static ConstructorHelpers::FClassFinder<APlayerController> ControllerFinder(TEXT("/Game/IronField/Core/Gameplay/BP_PlayerController"));
+	static ConstructorHelpers::FClassFinder<APlayerController> ControllerFinder(PlayerControllerClassPath);
 	if (ControllerFinder.Succeeded())
 	{
 		PlayerControllerClass = ControllerFinder.Class;
@@ -26,7 +32,7 @@ AIFGameMode::AIFGameMode()
 		PlayerControllerClass = AIFPlayerController::StaticClass();
 	}
 
-	static ConstructorHelpers::FClassFinder<APawn> PawnFinder(TEXT("/Game/IronField/Characters/Player/BP_Player"));
+	static ConstructorHelpers::FClassFinder<APawn> PawnFinder(PlayerPawnClassPath);
 	if (PawnFinder.Succeeded())
 	{
 		DefaultPawnClass = PawnFinder.Class;

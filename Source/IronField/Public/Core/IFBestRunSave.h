@@ -11,7 +11,8 @@ class IRONFIELD_API UIFBestRunSave : public USaveGame
 	GENERATED_BODY()
 
 public:
-	static FString GetSlotName() { return FString(TEXT("IronFieldBest")); }
+	static constexpr const TCHAR* SlotName = TEXT("IronFieldBest");
+	static FString GetSlotName() { return FString(SlotName); }
 
 	// Highest wave reached per mode, with kills from that run.
 	UPROPERTY(VisibleInstanceOnly, Category = "IronField|Save")

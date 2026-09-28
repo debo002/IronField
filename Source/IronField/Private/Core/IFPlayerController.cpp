@@ -9,9 +9,14 @@
 #include "UI/IFPauseMenuWidget.h"
 #include "UObject/ConstructorHelpers.h"
 
+namespace
+{
+	constexpr const TCHAR* HUDWidgetClassPath = TEXT("/Game/IronField/UI/WBP_HUD");
+}
+
 AIFPlayerController::AIFPlayerController()
 {
-	static ConstructorHelpers::FClassFinder<UIFHUD> HUDFinder(TEXT("/Game/IronField/UI/WBP_HUD"));
+	static ConstructorHelpers::FClassFinder<UIFHUD> HUDFinder(HUDWidgetClassPath);
 	if (HUDFinder.Succeeded())
 	{
 		HUDWidgetClass = HUDFinder.Class;

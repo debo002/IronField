@@ -11,11 +11,14 @@ class IRONFIELD_API UIFGameInstance : public UGameInstance
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "IronField|GameInstance|Levels")
-	FName MainMenuLevelName = TEXT("MainMenu");
+	static constexpr const TCHAR* DefaultMainMenuLevelName = TEXT("MainMenu");
+	static constexpr const TCHAR* DefaultGameplayLevelName = TEXT("MainLevel");
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "IronField|GameInstance|Levels")
-	FName GameplayLevelName = TEXT("MainLevel");
+	FName MainMenuLevelName = DefaultMainMenuLevelName;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "IronField|GameInstance|Levels")
+	FName GameplayLevelName = DefaultGameplayLevelName;
 
 	// Survives level travel so the wave manager can read the mode chosen on the menu.
 	UFUNCTION(BlueprintCallable, Category = "IronField|GameInstance|RunMode")
