@@ -53,25 +53,34 @@ void AIFMageEnemyCharacter::UpdateFocusOnTarget()
 		return;
 	}
 
-	AAIController* const AIController = Cast<AAIController>(GetController());
-	if (!AIController)
+	if (!CachedEnemyController.IsValid())
 	{
-		return;
+		CachedEnemyController = Cast<AIFEnemyController>(GetController());
 	}
 
-	const UBlackboardComponent* const Blackboard = AIController->GetBlackboardComponent();
-	if (!Blackboard)
-	{
-		return;
-	}
-
-	const AIFEnemyController* const EnemyController = Cast<AIFEnemyController>(AIController);
+	AIFEnemyController* const EnemyController = CachedEnemyController.Get();
 	if (!EnemyController)
 	{
 		return;
 	}
 
-	AActor* const DesiredFocus = Cast<AActor>(Blackboard->GetValueAsObject(EnemyController->GetTargetActorKeyName()));
+	// The blackboard appears once the behavior tree starts, so keep retrying until it resolves.
+	if (!CachedBlackboard.IsValid())
+	{
+		CachedBlackboard = EnemyController->GetBlackboardComponent();
+		if (CachedBlackboard.IsValid())
+		{
+			CachedTargetKey = EnemyController->GetTargetActorKeyName();
+		}
+	}
+
+	const UBlackboardComponent* const Blackboard = CachedBlackboard.Get();
+	if (!Blackboard)
+	{
+		return;
+	}
+
+	AActor* const DesiredFocus = Cast<AActor>(Blackboard->GetValueAsObject(CachedTargetKey));
 
 	if (DesiredFocus == CurrentFocusTarget.Get())
 	{
@@ -81,10 +90,10 @@ void AIFMageEnemyCharacter::UpdateFocusOnTarget()
 	CurrentFocusTarget = DesiredFocus;
 	if (DesiredFocus)
 	{
-		AIController->SetFocus(DesiredFocus);
+		EnemyController->SetFocus(DesiredFocus);
 	}
 	else
 	{
-		AIController->ClearFocus(EAIFocusPriority::Gameplay);
+		EnemyController->ClearFocus(EAIFocusPriority::Gameplay);
 	}
 }
