@@ -12,95 +12,95 @@
 
 AIFHealPickup::AIFHealPickup()
 {
-    PrimaryActorTick.bCanEverTick = true;
-    PrimaryActorTick.bStartWithTickEnabled = true;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = true;
 
-    CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
-    CollisionComponent->SetSphereRadius(100.f);
-    CollisionComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
-    CollisionComponent->SetCollisionObjectType(ECC_WorldDynamic);
-    CollisionComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
-    CollisionComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
-    CollisionComponent->SetGenerateOverlapEvents(true);
-    RootComponent = CollisionComponent;
+	CollisionComponent = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComponent"));
+	CollisionComponent->SetSphereRadius(100.f);
+	CollisionComponent->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+	CollisionComponent->SetCollisionObjectType(ECC_WorldDynamic);
+	CollisionComponent->SetCollisionResponseToAllChannels(ECR_Ignore);
+	CollisionComponent->SetCollisionResponseToChannel(ECC_Pawn, ECR_Overlap);
+	CollisionComponent->SetGenerateOverlapEvents(true);
+	RootComponent = CollisionComponent;
 
-    MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
-    MeshComponent->SetupAttachment(RootComponent);
-    MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	MeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComponent"));
+	MeshComponent->SetupAttachment(RootComponent);
+	MeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AIFHealPickup::BeginPlay()
 {
-    Super::BeginPlay();
+	Super::BeginPlay();
 
-    BaseLocation = GetActorLocation();
-    AccumulatedTime = 0.f;
-    CollisionComponent->OnComponentBeginOverlap.AddDynamic(this, &AIFHealPickup::OnOverlapBegin);
-    StartLifeTimer();
+	BaseLocation = GetActorLocation();
+	AccumulatedTime = 0.f;
+	CollisionComponent->OnComponentBeginOverlap.AddDynamic(this, &AIFHealPickup::OnOverlapBegin);
+	StartLifeTimer();
 }
 
 void AIFHealPickup::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-    GetWorldTimerManager().ClearTimer(LifeTimerHandle);
-    CollisionComponent->OnComponentBeginOverlap.RemoveAll(this);
-    Super::EndPlay(EndPlayReason);
+	GetWorldTimerManager().ClearTimer(LifeTimerHandle);
+	CollisionComponent->OnComponentBeginOverlap.RemoveAll(this);
+	Super::EndPlay(EndPlayReason);
 }
 
 void AIFHealPickup::Tick(float DeltaTime)
 {
-    Super::Tick(DeltaTime);
+	Super::Tick(DeltaTime);
 
-    AccumulatedTime += DeltaTime;
+	AccumulatedTime += DeltaTime;
 
-    // Offset from the spawn anchor so the bob oscillates in place instead of drifting.
-    const float BobOffset = FMath::Sin(AccumulatedTime * BobFrequency * 2.f * PI) * BobAmplitude;
-    FVector Location = BaseLocation;
-    Location.Z += BobOffset;
-    SetActorLocation(Location);
+	// Offset from the spawn anchor so the bob oscillates in place instead of drifting.
+	const float BobOffset = FMath::Sin(AccumulatedTime * BobFrequency * 2.f * PI) * BobAmplitude;
+	FVector Location = BaseLocation;
+	Location.Z += BobOffset;
+	SetActorLocation(Location);
 
-    FRotator Rotation = GetActorRotation();
-    Rotation.Yaw += SpinSpeed * DeltaTime;
-    SetActorRotation(Rotation);
+	FRotator Rotation = GetActorRotation();
+	Rotation.Yaw += SpinSpeed * DeltaTime;
+	SetActorRotation(Rotation);
 }
 
 bool AIFHealPickup::TryHealActor(AActor* Actor)
 {
-    if (!Actor || Actor == this)
-    {
-        return false;
-    }
+	if (!Actor || Actor == this)
+	{
+		return false;
+	}
 
-    // Only heal the player character
-    AIFPlayerCharacter* const Player = Cast<AIFPlayerCharacter>(Actor);
-    if (!Player)
-    {
-        return false;
-    }
+	// Only heal the player character
+	AIFPlayerCharacter* const Player = Cast<AIFPlayerCharacter>(Actor);
+	if (!Player)
+	{
+		return false;
+	}
 
-    UIFHealthComponent* const Health = Player->GetHealthComponent();
-    if (!Health || Health->IsDead())
-    {
-        return false;
-    }
+	UIFHealthComponent* const Health = Player->GetHealthComponent();
+	if (!Health || Health->IsDead())
+	{
+		return false;
+	}
 
-    Health->ApplyHealing(HealAmount);
-    UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Pickup healed %s for %.0f HP."), *GetNameSafe(Player), HealAmount);
-    return true;
+	Health->ApplyHealing(HealAmount);
+	UE_LOG(LogIronField, Log, TEXT("[IF-Heal] Pickup healed %s for %.0f HP."), *GetNameSafe(Player), HealAmount);
+	return true;
 }
 
 void AIFHealPickup::OnOverlapBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-    if (TryHealActor(OtherActor))
-    {
-        OnPickedUp(OtherActor);
+	if (TryHealActor(OtherActor))
+	{
+		OnPickedUp(OtherActor);
 
-        if (PickupSound)
-        {
-            IFFeedbackUtils::PlayAtLocation(GetWorld(), PickupSound, nullptr, GetActorLocation());
-        }
+		if (PickupSound)
+		{
+			IFFeedbackUtils::PlayAtLocation(GetWorld(), PickupSound, nullptr, GetActorLocation());
+		}
 
-        DestroyPickup();
-    }
+		DestroyPickup();
+	}
 }
 
 void AIFHealPickup::OnPickedUp_Implementation(AActor* Picker)
@@ -109,13 +109,13 @@ void AIFHealPickup::OnPickedUp_Implementation(AActor* Picker)
 
 void AIFHealPickup::StartLifeTimer()
 {
-    if (UWorld* const World = GetWorld())
-    {
-        World->GetTimerManager().SetTimer(LifeTimerHandle, this, &AIFHealPickup::DestroyPickup, LifeSeconds, false);
-    }
+	if (UWorld* const World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(LifeTimerHandle, this, &AIFHealPickup::DestroyPickup, LifeSeconds, false);
+	}
 }
 
 void AIFHealPickup::DestroyPickup()
 {
-    Destroy();
+	Destroy();
 }
