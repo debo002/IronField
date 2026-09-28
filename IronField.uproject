@@ -2,7 +2,7 @@
 	"FileVersion": 3,
 	"EngineAssociation": "5.8",
 	"Category": "",
-	"Description": "Wave-defense action game: defend the stronghold against melee and mage enemies across Normal and Unlimited runs.",
+	"Description": "",
 	"Modules": [
 		{
 			"Name": "IronField",
@@ -24,19 +24,17 @@
 			]
 		},
 		{
-			"Name": "AllToolsets",
-			"Enabled": true,
-			"TargetAllowList": [
-				"Editor"
-			]
+			"Name": "StateTree",
+			"Enabled": true
 		},
 		{
-			"Name": "Aura",
+			"Name": "GameplayStateTree",
+			"Enabled": true
+		},
+		{
+			"Name": "GraphPrinter",
 			"Enabled": true,
-			"SupportedTargetPlatforms": [
-				"Win64",
-				"Mac"
-			]
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/466303b6cd724968b3ee0a1a1b623f4b"
 		}
 	]
 }
